@@ -2,17 +2,18 @@
 #include <iostream>
 #include <fstream>
 #include <SDL2/SDL_image.h>
+#include <SDL2/SDL_mixer.h>
 #include <filesystem>
 #include <chrono>
 
 using namespace std;
 
-filesystem::file_time_type getLastWriteTime(const string& filePath) {
-    return filesystem::last_write_time(filePath);
+file_time_type getLastWriteTime(const string& filePath) {
+    return last_write_time(filePath);
 }
 
 bool init(SDL_Window*& window, SDL_Renderer*& renderer) {
-    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
         cerr << "SDL could not initialize! SDL_Error: " << SDL_GetError() << endl;
         return false;
     }
@@ -34,6 +35,11 @@ bool init(SDL_Window*& window, SDL_Renderer*& renderer) {
         return false;
     }
 
+    if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0) {
+        cerr << "SDL_mixer could not initialize! SDL_mixer Error: " << Mix_GetError() << endl;
+        return false;
+    }
+
     return true;
 }
 
@@ -51,17 +57,15 @@ SDL_Texture* loadTexture(const string& path, SDL_Renderer* renderer) {
     return newTexture;
 }
 
-void close(SDL_Window* window, SDL_Renderer* renderer, vector<GameObject>& gameObjects) {
-    for (auto& obj : gameObjects) {
-        SDL_DestroyTexture(obj.texture);
-    }
+void close(SDL_Window* window, SDL_Renderer* renderer) {
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
+    Mix_Quit();
     IMG_Quit();
     SDL_Quit();
 }
 
-void loadLevel(const string& filePath, vector<GameObject>& gameObjects, SDL_Renderer* renderer, SDL_Texture* brickTexture, SDL_Texture* vineTexture, SDL_Texture* marioTexture, GameObject& player) {
+void loadLevel(const string& filePath, vector<GameObject>& gameObjects, SDL_Renderer* renderer, SDL_Texture* brickTexture, SDL_Texture* vineTexture, SDL_Texture* marioTexture, SDL_Texture* starCoinTexture ,GameObject& player) {
     ifstream levelFile(filePath);
     string line;
     int y = 0;
@@ -80,6 +84,8 @@ void loadLevel(const string& filePath, vector<GameObject>& gameObjects, SDL_Rend
                 gameObjects.push_back({ brickTexture, rect });
             } else if (tile == '/') {
                 gameObjects.push_back({ vineTexture, rect });
+            } else if (tile == '+') {
+                gameObjects.push_back({ starCoinTexture, rect });
             } else if (tile == '@') {
                 if (++playerInit > 1) {
                     throw runtime_error("Error: Player character initialized more than once!");
@@ -115,7 +121,7 @@ bool isOnPlatform(const GameObject& player, const vector<GameObject>& gameObject
     return false;
 }
 
-void handleInput(const SDL_Event& e, GameObject& player, const vector<GameObject>& gameObjects, SDL_Texture* vineTexture, SDL_Texture* marioTextureLeft, SDL_Texture* marioTextureRight, bool& quit) {
+void handleInput(const SDL_Event& e, GameObject& player, const vector<GameObject>& gameObjects, SDL_Texture* vineTexture, SDL_Texture* marioTextureLeft, SDL_Texture* marioTextureRight, bool& quit, bool& musicPlaying, Mix_Music* soundtrack) {
     if (e.type == SDL_KEYDOWN) {
         SDL_Rect newRect = player.rect;
         constexpr int moveSpeed = TILE_SIZE;
@@ -129,14 +135,22 @@ void handleInput(const SDL_Event& e, GameObject& player, const vector<GameObject
             break;
         case SDLK_a:
             newRect.x -= moveSpeed;
-            player.texture = marioTextureLeft; // Change to left texture
+            player.texture = marioTextureLeft;
             break;
         case SDLK_d:
             newRect.x += moveSpeed;
-            player.texture = marioTextureRight; // Change to right texture
+            player.texture = marioTextureRight;
+            break;
+        case SDLK_m:
+            if (musicPlaying) {
+                Mix_PauseMusic();
+            } else {
+                Mix_ResumeMusic();
+            }
+            musicPlaying = !musicPlaying;
             break;
         case SDLK_ESCAPE:
-            quit = true; // Set quit flag to true
+            quit = true;
             break;
         default: break;
         }

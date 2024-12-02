@@ -1,4 +1,5 @@
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_mixer.h>
 #include <iostream>
 #include <vector>
 #include <string>
@@ -17,23 +18,33 @@ int main(int argc, char* args[]) {
 
     SDL_Texture* brickTexture = loadTexture("../resources/brick.png", renderer);
     SDL_Texture* vineTexture = loadTexture("../resources/vine.png", renderer);
+    SDL_Texture* starCoinTexture = loadTexture("../resources/star-coin.png", renderer);
     SDL_Texture* marioTextureLeft = loadTexture("../resources/mario-l.png", renderer);
     SDL_Texture* marioTextureRight = loadTexture("../resources/mario-r.png", renderer);
     SDL_Texture* backgroundTexture = loadTexture("../resources/background.png", renderer);
 
     if (!brickTexture || !vineTexture || !marioTextureLeft || !marioTextureRight || !backgroundTexture) {
         cerr << "Failed to load textures!" << endl;
-        vector<GameObject> emptyGameObjects;
-        close(window, renderer, emptyGameObjects);
+        close(window, renderer);
         return -1;
     }
 
+    Mix_Music* soundtrack = Mix_LoadMUS("../resources/soundtrack.mp3");
+    if (!soundtrack) {
+        cerr << "Failed to load soundtrack! SDL_mixer Error: " << Mix_GetError() << endl;
+        close(window, renderer);
+        return -1;
+    }
+
+    Mix_PlayMusic(soundtrack, -1);
+    bool musicPlaying = true;
+
     vector<GameObject> gameObjects;
     GameObject player{};
-    std::string levelPath = "../level.txt";
-    loadLevel(levelPath, gameObjects, renderer, brickTexture, vineTexture, marioTextureLeft, player);
+    string levelPath = "../level.txt";
+    loadLevel(levelPath, gameObjects, renderer, brickTexture, vineTexture, marioTextureLeft, starCoinTexture, player);
 
-    auto lastWriteTime = getLastWriteTime(levelPath);
+    auto lastWriteTime = last_write_time(levelPath);
 
     bool quit = false;
     SDL_Event e;
@@ -43,7 +54,7 @@ int main(int argc, char* args[]) {
             if (e.type == SDL_QUIT) {
                 quit = true;
             }
-            handleInput(e, player, gameObjects, vineTexture, marioTextureLeft, marioTextureRight, quit);
+            handleInput(e, player, gameObjects, vineTexture, marioTextureLeft, marioTextureRight, quit, musicPlaying, soundtrack);
         }
 
         // Check if the level file has been modified
@@ -51,7 +62,7 @@ int main(int argc, char* args[]) {
         if (currentWriteTime != lastWriteTime) {
             // Reset the game state
             gameObjects.clear();
-            loadLevel(levelPath, gameObjects, renderer, brickTexture, vineTexture, marioTextureLeft, player);
+            loadLevel(levelPath, gameObjects, renderer, brickTexture, vineTexture, marioTextureLeft, starCoinTexture, player);
             lastWriteTime = currentWriteTime;
         }
 
@@ -90,6 +101,7 @@ int main(int argc, char* args[]) {
         SDL_RenderPresent(renderer);
     }
 
-    close(window, renderer, gameObjects);
+    Mix_FreeMusic(soundtrack);
+    close(window, renderer);
     return 0;
 }
