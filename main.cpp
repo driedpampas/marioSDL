@@ -16,7 +16,7 @@ using namespace std::filesystem;
 
 struct GameObject {
     SDL_Texture* texture;
-    SDL_FRect rect;
+    SDL_Rect rect;
 };
 
 bool init(SDL_Window*& window, SDL_Renderer*& renderer) {
@@ -53,7 +53,7 @@ bool init(SDL_Window*& window, SDL_Renderer*& renderer) {
 void loadLevel(const string& filePath, vector<GameObject>& gameObjects, SDL_Renderer* renderer, SDL_Texture* brickTexture, SDL_Texture* vineTexture, SDL_Texture* marioTexture, SDL_Texture* starCoinTexture ,GameObject& player) {
     ifstream levelFile(filePath);
     string line;
-    float x = 0 , y = 0;
+    int y = 0;
     int playerInit = 0;
 
     while (getline(levelFile, line)) {
@@ -62,9 +62,9 @@ void loadLevel(const string& filePath, vector<GameObject>& gameObjects, SDL_Rend
             line = line.substr(0, commentPos);
         }
 
-        for (x = 0; x < line.length(); ++x) {
+        for (int x = 0; x < line.length(); ++x) {
             char tile = line[x];
-            SDL_FRect rect = { x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE };
+            SDL_Rect rect = { x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE };
             if (tile == '1') {
                 gameObjects.push_back({ brickTexture, rect });
             } else if (tile == '/') {
@@ -82,8 +82,8 @@ void loadLevel(const string& filePath, vector<GameObject>& gameObjects, SDL_Rend
     }
 }
 
-bool checkCollision(const SDL_FRect& a, const SDL_FRect& b) {
-    return SDL_HasIntersectionF(&a, &b);
+bool checkCollision(const SDL_Rect& a, const SDL_Rect& b) {
+    return SDL_HasIntersection(&a, &b);
 }
 
 bool isOnVine(const GameObject& player, const vector<GameObject>& gameObjects, SDL_Texture* vineTexture) {
@@ -99,7 +99,7 @@ bool isOnVine(const GameObject& player, const vector<GameObject>& gameObjects, S
 }
 
 bool isOnPlatform(const GameObject& player, const vector<GameObject>& gameObjects, SDL_Texture* brickTexture) {
-    SDL_FRect belowPlayer = player.rect;
+    SDL_Rect belowPlayer = player.rect;
     belowPlayer.y += 1; // Check just below the player
     for (const auto& obj : gameObjects) {
         if (obj.texture == brickTexture && checkCollision(belowPlayer, obj.rect)) {
@@ -111,7 +111,7 @@ bool isOnPlatform(const GameObject& player, const vector<GameObject>& gameObject
 
 void handleInput(const SDL_Event& e, GameObject& player, const vector<GameObject>& gameObjects, SDL_Texture* vineTexture, SDL_Texture* marioTextureLeft, SDL_Texture* marioTextureRight, bool& quit, bool& musicPlaying, Mix_Music* soundtrack) {
     if (e.type == SDL_KEYDOWN) {
-        SDL_FRect newRect = player.rect;
+        SDL_Rect newRect = player.rect;
         constexpr int moveSpeed = TILE_SIZE;
 
         switch (e.key.keysym.sym) {
@@ -214,7 +214,7 @@ int main(int argc, char* args[]) {
 
         if (!isOnPlatform(player, gameObjects, brickTexture) && !isOnVine(player, gameObjects, vineTexture)) {
             bool atTopOfVine = false;
-            SDL_FRect belowPlayer = player.rect;
+            SDL_Rect belowPlayer = player.rect;
             belowPlayer.y += 1;
 
             for (const GameObject& obj : gameObjects) {
@@ -225,7 +225,7 @@ int main(int argc, char* args[]) {
             }
 
             if (!atTopOfVine) {
-                float gravity = 0.08;
+                constexpr int gravity = 1;
                 player.rect.y += gravity;
                 if (player.rect.y + player.rect.h > SCREEN_HEIGHT) { // imagine falling off the screen :')
                     player.rect.y = SCREEN_HEIGHT - player.rect.h;
@@ -238,9 +238,9 @@ int main(int argc, char* args[]) {
 
         SDL_RenderCopy(renderer, backgroundTexture, nullptr, nullptr);
         for (const GameObject& obj : gameObjects) {
-            SDL_RenderCopyF(renderer, obj.texture, nullptr, &obj.rect);
+            SDL_RenderCopy(renderer, obj.texture, nullptr, &obj.rect);
         }
-        SDL_RenderCopyF(renderer, player.texture, nullptr, &player.rect);
+        SDL_RenderCopy(renderer, player.texture, nullptr, &player.rect);
 
         SDL_RenderPresent(renderer);
     }
