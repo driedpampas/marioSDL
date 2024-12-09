@@ -19,6 +19,36 @@ struct GameObject {
     SDL_Rect rect;
 };
 
+std::vector<int> checkIntersections(const SDL_Rect* A, const SDL_Rect* B) {
+    std::vector<int> intersections;
+
+    if (!A || !B) {
+        return intersections;
+    }
+
+    if (A->x + A->w > B->x && A->x < B->x + B->w) {
+        if (A->y + A->h <= B->y) {
+            intersections.push_back(1); // Intersection above
+        } else if (A->y >= B->y + B->h) {
+            intersections.push_back(3); // Intersection below
+        }
+    }
+
+    if (A->y + A->h > B->y && A->y < B->y + B->h) {
+        if (A->x + A->w <= B->x) {
+            intersections.push_back(2); // Intersection right
+        } else if (A->x >= B->x + B->w) {
+            intersections.push_back(4); // Intersection left
+        }
+    }
+
+    if (intersections.empty()) {
+        intersections.push_back(0); // No intersection
+    }
+
+    return intersections;
+}
+
 bool init(SDL_Window*& window, SDL_Renderer*& renderer) {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
         cerr << "SDL could not initialize! SDL_Error: " << SDL_GetError() << endl;
@@ -82,8 +112,8 @@ void loadLevel(const string& filePath, vector<GameObject>& gameObjects, SDL_Rend
     }
 }
 
-bool checkCollision(const SDL_Rect& a, const SDL_Rect& b) {
-    return SDL_HasIntersection(&a, &b);
+bool hasIntersection(const SDL_Rect& a, const SDL_Rect& b) {
+    return hasIntersection(&a, &b);
 }
 
 bool isOnVine(const GameObject& player, const vector<GameObject>& gameObjects, SDL_Texture* vineTexture) {
@@ -91,7 +121,7 @@ bool isOnVine(const GameObject& player, const vector<GameObject>& gameObjects, S
         if (obj.texture == vineTexture) {
             return false;
         }
-        if (obj.texture == vineTexture && checkCollision(player.rect, obj.rect)) {
+        if (obj.texture == vineTexture && hasIntersection(player.rect, obj.rect)) {
             return true;
         }
     }
@@ -102,7 +132,7 @@ bool isOnPlatform(const GameObject& player, const vector<GameObject>& gameObject
     SDL_Rect belowPlayer = player.rect;
     belowPlayer.y += 1; // Check just below the player
     for (const auto& obj : gameObjects) {
-        if (obj.texture == brickTexture && checkCollision(belowPlayer, obj.rect)) {
+        if (obj.texture == brickTexture && hasIntersection(belowPlayer, obj.rect)) {
             return true;
         }
     }
@@ -152,7 +182,7 @@ void handleInput(const SDL_Event& e, GameObject& player, const vector<GameObject
         bool collision = false;
         for (const auto& obj : gameObjects) {
             if (obj.texture == player.texture) continue; // Skip player texture
-            if (obj.texture != vineTexture && checkCollision(newRect, obj.rect)) {
+            if (obj.texture != vineTexture && hasIntersection(newRect, obj.rect)) {
                 collision = true;
                 break;
             }
@@ -218,7 +248,7 @@ int main(int argc, char* args[]) {
             belowPlayer.y += 1;
 
             for (const GameObject& obj : gameObjects) {
-                if (obj.texture == vineTexture && checkCollision(belowPlayer, obj.rect)) {
+                if (obj.texture == vineTexture && hasIntersection(belowPlayer, obj.rect)) {
                     atTopOfVine = true;
                     break;
                 }
