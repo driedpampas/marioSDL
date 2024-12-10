@@ -28,9 +28,6 @@ bool hasIntersection(const SDL_Rect* A, const SDL_Rect* B) {
     return true;
 }
 
-int totalCoins = 0;
-int collectedCoins = 0;
-
 void loadLevel(const string& filePath, vector<GameObject>& gameObjects, SDL_Renderer* renderer, SDL_Texture* brickTexture, SDL_Texture* vineTexture, SDL_Texture* marioTexture, SDL_Texture* starCoinTexture, GameObject& player) {
     ifstream levelFile(filePath);
     string line;
@@ -47,7 +44,6 @@ void loadLevel(const string& filePath, vector<GameObject>& gameObjects, SDL_Rend
                 gameObjects.push_back({ vineTexture, rect });
             } else if (tile == '+') {
                 gameObjects.push_back({ starCoinTexture, rect });
-                totalCoins++;
             } else if (tile == '@') {
                 if (++playerInit > 1) {
                     throw runtime_error("Error: Player character initialized more than once!");
@@ -241,6 +237,9 @@ int main(int argc, char* args[]) {
                         }
                         musicPlaying = !musicPlaying;
                         break;
+                    case SDLK_p:
+                        gameState = WON;
+                        break;
                     case SDLK_ESCAPE:
                         quit = true;
                         break;
@@ -254,15 +253,6 @@ int main(int argc, char* args[]) {
                     if (newRect.y + newRect.h > SCREEN_HEIGHT) newRect.y = SCREEN_HEIGHT - newRect.h;
 
                     bool collision = false;
-
-                    // Check for collisions with star coins
-                    for (auto it = gameObjects.begin(); it != gameObjects.end(); ++it) {
-                        if (it->texture == starCoinTexture && hasIntersection(newRect, it->rect)) {
-                            collectedCoins++;
-                            gameObjects.erase(it);
-                            break;
-                        }
-                    }
 
                     // Check for collisions with other game objects
                     for (const auto& obj : gameObjects) {
@@ -312,15 +302,7 @@ int main(int argc, char* args[]) {
             }
             SDL_RenderCopy(renderer, player.texture, nullptr, &player.rect);
 
-            // Render the coin counter
-            string coinText = "Coins: " + to_string(collectedCoins) + "/" + to_string(totalCoins);
-            renderText(renderer, coinText, 10, 10);
-
             SDL_RenderPresent(renderer);
-
-            if (collectedCoins == totalCoins) {
-                gameState = WON;
-            }
         } else if (gameState == WON) {
             renderWinningScreen(renderer);
         }
