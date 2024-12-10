@@ -8,9 +8,9 @@
 #include <fstream>
 #include <filesystem>
 
-#define SCREEN_WIDTH 800
-#define SCREEN_HEIGHT 600
-#define TILE_SIZE 40
+int SCREEN_WIDTH = 800;
+int SCREEN_HEIGHT = 600;
+int TILE_SIZE = 40;
 
 using namespace std;
 using namespace std::filesystem;
@@ -31,9 +31,12 @@ bool hasIntersection(const SDL_Rect* A, const SDL_Rect* B) {
 void loadLevel(const string& filePath, vector<GameObject>& gameObjects, SDL_Renderer* renderer, SDL_Texture* brickTexture, SDL_Texture* vineTexture, SDL_Texture* marioTexture, SDL_Texture* starCoinTexture, GameObject& player) {
     ifstream levelFile(filePath);
     string line;
-    int y = 0;
+
+    levelFile >> SCREEN_WIDTH >> SCREEN_HEIGHT >> TILE_SIZE;
+    int y = -1;
     int playerInit = 0;
 
+    // Read the level data from the second line onwards
     while (getline(levelFile, line)) {
         for (int x = 0; x < line.length(); ++x) {
             char tile = line[x];
@@ -54,7 +57,6 @@ void loadLevel(const string& filePath, vector<GameObject>& gameObjects, SDL_Rend
         ++y;
     }
 }
-
 bool hasIntersection(const SDL_Rect& a, const SDL_Rect& b) {
     return hasIntersection(&a, &b);
 }
@@ -212,7 +214,7 @@ int main(int argc, char* args[]) {
                     quit = true;
                 } else if (gameState == PLAYING) {
                     SDL_Rect newRect = player.rect;
-                    constexpr int moveSpeed = TILE_SIZE;
+                    int moveSpeed = TILE_SIZE;
 
                     switch (e.key.keysym.sym) {
                     case SDLK_w:
