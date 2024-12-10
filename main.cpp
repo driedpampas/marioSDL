@@ -35,49 +35,6 @@ bool hasIntersection(const SDL_Rect* A, const SDL_Rect* B) {
 
 int totalCoins = 0;
 int collectedCoins = 0;
-TTF_Font* font = nullptr;
-
-bool init(SDL_Window*& window, SDL_Renderer*& renderer) {
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
-        cerr << "SDL could not initialize! SDL_Error: " << SDL_GetError() << endl;
-        return false;
-    }
-
-    window = SDL_CreateWindow("Mario", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
-    if (!window) {
-        cerr << "Window could not be created! SDL_Error: " << SDL_GetError() << endl;
-        return false;
-    }
-
-    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-    if (!renderer) {
-        cerr << "Renderer could not be created! SDL_Error: " << SDL_GetError() << endl;
-        return false;
-    }
-
-    if (int imgFlags = IMG_INIT_PNG; !(IMG_Init(imgFlags) & imgFlags)) {
-        cerr << "SDL_image could not initialize! SDL_image Error: " << IMG_GetError() << endl;
-        return false;
-    }
-
-    if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0) {
-        cerr << "SDL_mixer could not initialize! SDL_mixer Error: " << Mix_GetError() << endl;
-        return false;
-    }
-
-    if (TTF_Init() == -1) {
-        cerr << "SDL_ttf could not initialize! SDL_ttf Error: " << TTF_GetError() << endl;
-        return false;
-    }
-
-    font = TTF_OpenFont("../resources/opensans.ttf", 24);
-    if (!font) {
-        cerr << "Failed to load font! SDL_ttf Error: " << TTF_GetError() << endl;
-        return false;
-    }
-
-    return true;
-}
 
 void loadLevel(const string& filePath, vector<GameObject>& gameObjects, SDL_Renderer* renderer, SDL_Texture* brickTexture, SDL_Texture* vineTexture, SDL_Texture* marioTexture, SDL_Texture* starCoinTexture, GameObject& player) {
     ifstream levelFile(filePath);
@@ -105,16 +62,6 @@ void loadLevel(const string& filePath, vector<GameObject>& gameObjects, SDL_Rend
         }
         ++y;
     }
-}
-
-void renderText(SDL_Renderer* renderer, const string& text, int x, int y) {
-    SDL_Color textColor = { 255, 255, 255, 255 };
-    SDL_Surface* textSurface = TTF_RenderText_Solid(font, text.c_str(), textColor);
-    SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
-    SDL_Rect renderQuad = { x, y, textSurface->w, textSurface->h };
-    SDL_RenderCopy(renderer, textTexture, nullptr, &renderQuad);
-    SDL_FreeSurface(textSurface);
-    SDL_DestroyTexture(textTexture);
 }
 
 bool hasIntersection(const SDL_Rect& a, const SDL_Rect& b) {
@@ -149,6 +96,18 @@ enum GameState {
     WON
 };
 
+TTF_Font* font = nullptr;
+
+void renderText(SDL_Renderer* renderer, const string& text, int x, int y) {
+    SDL_Color textColor = { 255, 255, 255, 255 };
+    SDL_Surface* textSurface = TTF_RenderText_Solid(font, text.c_str(), textColor);
+    SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+    SDL_Rect renderQuad = { x, y, textSurface->w, textSurface->h };
+    SDL_RenderCopy(renderer, textTexture, nullptr, &renderQuad);
+    SDL_FreeSurface(textSurface);
+    SDL_DestroyTexture(textTexture);
+}
+
 void renderWinningScreen(SDL_Renderer* renderer) {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
@@ -163,10 +122,13 @@ int main(int argc, char* args[]) {
     SDL_Window* window = nullptr;
     SDL_Renderer* renderer = nullptr;
 
-    if (!init(window, renderer)) {
-        cerr << "Failed to initialize!" << endl;
-        return -1;
-    }
+    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
+    window = SDL_CreateWindow("Mario", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    IMG_Init(IMG_INIT_PNG);
+    Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048);
+    TTF_Init();
+    font = TTF_OpenFont("../resources/opensans.ttf", 24);
 
     SDL_Texture* brickTexture = IMG_LoadTexture(renderer, "../resources/brick.png");
     SDL_Texture* vineTexture = IMG_LoadTexture(renderer, "../resources/vine.png");
