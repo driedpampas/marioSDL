@@ -21,14 +21,9 @@ struct GameObject {
 };
 
 bool hasIntersection(const SDL_Rect* A, const SDL_Rect* B) {
-    if (!A || !B) {
+    if (A->x + A->w <= B->x || B->x + B->w <= A->x || A->y + A->h <= B->y || B->y + B->h <= A->y) {
         return false;
     }
-
-    if (A->x + A->w <= B->x || B->x + B->w <= A->x ||
-        A->y + A->h <= B->y || B->y + B->h <= A->y) {
-        return false;
-        }
 
     return true;
 }
@@ -92,6 +87,7 @@ bool isOnPlatform(const GameObject& player, const vector<GameObject>& gameObject
 }
 
 enum GameState {
+    LEVEL_SELECT,
     PLAYING,
     WON
 };
@@ -114,6 +110,33 @@ void renderWinningScreen(SDL_Renderer* renderer) {
 
     renderText(renderer, "You Won!", SCREEN_WIDTH / 2 - 50, SCREEN_HEIGHT / 2 - 50);
     renderText(renderer, "Press Space to end the game", SCREEN_WIDTH / 2 - 150, SCREEN_HEIGHT / 2);
+
+    SDL_RenderPresent(renderer);
+}
+
+vector<string> getLevelFiles(const string& folderPath) {
+    vector<string> levelFiles;
+    for (const auto& entry : directory_iterator(folderPath)) {
+        if (entry.path().extension() == ".lvl") {
+            levelFiles.push_back(entry.path().string());
+        }
+    }
+    return levelFiles;
+}
+
+void renderLevelSelectScreen(SDL_Renderer* renderer, const vector<string>& levelFiles, int selectedIndex) {
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderClear(renderer);
+
+    renderText(renderer, "Select a Level", SCREEN_WIDTH / 2 - 50, 50);
+
+    for (int i = 0; i < levelFiles.size(); ++i) {
+        string levelName = levelFiles[i].substr(levelFiles[i].find_last_of("/\\") + 1);
+        if (i == selectedIndex) {
+            levelName = "> " + levelName;
+        }
+        renderText(renderer, levelName, SCREEN_WIDTH / 2 - 100, 100 + i * 30);
+    }
 
     SDL_RenderPresent(renderer);
 }
@@ -144,23 +167,18 @@ int main(int argc, char* args[]) {
     }
 
     Mix_Music* soundtrack = Mix_LoadMUS("../resources/soundtrack.mp3");
-    if (!soundtrack) {
-        cerr << "Failed to load soundtrack! SDL_mixer Error: " << Mix_GetError() << endl;
-        SDL_Quit();
-        return -1;
-    }
-
     Mix_PlayMusic(soundtrack, -1);
     bool musicPlaying = true;
 
     vector<GameObject> gameObjects;
     GameObject player{};
-    string levelPath = "../level.txt";
-    loadLevel(levelPath, gameObjects, renderer, brickTexture, vineTexture, marioTextureLeft, starCoinTexture, player);
+
+    vector<string> levelFiles = getLevelFiles("../levels");
+    int selectedIndex = 0;
+    GameState gameState = LEVEL_SELECT;
 
     bool quit = false;
     SDL_Event e;
-    GameState gameState = PLAYING;
 
     while (!quit) {
         while (SDL_PollEvent(&e) != 0) {
@@ -168,7 +186,33 @@ int main(int argc, char* args[]) {
                 quit = true;
             }
             if (e.type == SDL_KEYDOWN) {
-                if (gameState == WON && e.key.keysym.sym == SDLK_SPACE) {
+
+                if (gameState == LEVEL_SELECT) {
+                    switch (e.key.keysym.sym) {
+                    case SDLK_w:
+                        selectedIndex = (selectedIndex > 0) ? selectedIndex - 1 : levelFiles.size() - 1;
+                        break;
+                    case SDLK_s:
+                        selectedIndex = (selectedIndex < levelFiles.size() - 1) ? selectedIndex + 1 : 0;
+                        break;
+                    case SDLK_RETURN:
+                        loadLevel(levelFiles[selectedIndex], gameObjects, renderer, brickTexture, vineTexture, marioTextureLeft, starCoinTexture, player);
+                        gameState = PLAYING;
+                        break;
+                    case SDLK_ESCAPE:
+                        quit = true;
+                        break;
+                    case SDLK_m:
+                        if (musicPlaying) {
+                            Mix_PauseMusic();
+                        } else {
+                            Mix_ResumeMusic();
+                        }
+                        musicPlaying = !musicPlaying;
+                        break;
+                    default: break;
+                    }
+                } else if (gameState == WON && e.key.keysym.sym == SDLK_SPACE) {
                     quit = true;
                 } else if (gameState == PLAYING) {
                     SDL_Rect newRect = player.rect;
@@ -235,7 +279,9 @@ int main(int argc, char* args[]) {
             }
         }
 
-        if (gameState == PLAYING) {
+        if (gameState == LEVEL_SELECT) {
+            renderLevelSelectScreen(renderer, levelFiles, selectedIndex);
+        } else if (gameState == PLAYING) {
             if (!isOnPlatform(player, gameObjects, brickTexture) && !isOnVine(player, gameObjects, vineTexture)) {
                 bool atTopOfVine = false;
                 SDL_Rect belowPlayer = player.rect;
@@ -275,7 +321,7 @@ int main(int argc, char* args[]) {
             if (collectedCoins == totalCoins) {
                 gameState = WON;
             }
-        } else {
+        } else if (gameState == WON) {
             renderWinningScreen(renderer);
         }
     }
