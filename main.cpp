@@ -20,6 +20,10 @@ struct GameObject {
     SDL_Rect rect;
 };
 
+TTF_Font* font = nullptr;
+SDL_Window* window = nullptr;
+SDL_Renderer* renderer = nullptr;
+
 bool hasIntersection(const SDL_Rect* A, const SDL_Rect* B) {
     if (A->x + A->w <= B->x || B->x + B->w <= A->x || A->y + A->h <= B->y || B->y + B->h <= A->y) {
         return false;
@@ -88,8 +92,6 @@ enum GameState {
     WON
 };
 
-TTF_Font* font = nullptr;
-
 void renderText(SDL_Renderer* renderer, const string& text, int x, int y) {
     SDL_Color textColor = { 255, 255, 255, 255 };
     SDL_Surface* textSurface = TTF_RenderText_Solid(font, text.c_str(), textColor);
@@ -136,8 +138,7 @@ void renderLevelSelectScreen(SDL_Renderer* renderer, const vector<string>& level
 }
 
 int main(int argc, char* args[]) {
-    SDL_Window* window = nullptr;
-    SDL_Renderer* renderer = nullptr;
+
 
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
     window = SDL_CreateWindow("Mario", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
@@ -170,7 +171,6 @@ int main(int argc, char* args[]) {
     vector<string> levelFiles = getLevelFiles("../levels");
     int selectedIndex = 0;
     GameState gameState = LEVEL_SELECT;
-    renderLevelSelectScreen(renderer, levelFiles, selectedIndex);
 
     bool quit = false;
     SDL_Event e;
@@ -266,7 +266,9 @@ int main(int argc, char* args[]) {
                 }
             }
         }
-        if (gameState == PLAYING) {
+        if (gameState == LEVEL_SELECT) {
+            renderLevelSelectScreen(renderer, levelFiles, selectedIndex);
+        } if (gameState == PLAYING) {
             if (!isOnPlatform(player, gameObjects, brickTexture) && !isOnVine(player, gameObjects, vineTexture)) {
                 bool atTopOfVine = false;
                 SDL_Rect belowPlayer = player.rect;
@@ -288,7 +290,7 @@ int main(int argc, char* args[]) {
                 }
             }
 
-            SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, 0x00);
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
             SDL_RenderClear(renderer);
 
             SDL_RenderCopy(renderer, backgroundTexture, nullptr, nullptr);
