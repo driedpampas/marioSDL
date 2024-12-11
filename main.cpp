@@ -118,15 +118,6 @@ vector<string> getLevelFiles(const string& folderPath) {
     return levelFiles;
 }
 
-int vp =0;
-void printVector(const std::vector<std::string>& vec) {
-    vp += 1;
-    if (vp >1) return;
-    for (const auto& element : vec) {
-        std::cout << element << std::endl;
-    }
-}
-
 void renderLevelSelectScreen(SDL_Renderer* renderer, const vector<string>& levelFiles, int selectedIndex) {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
