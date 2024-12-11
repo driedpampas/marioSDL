@@ -121,9 +121,7 @@ vector<string> getLevelFiles(const string& folderPath) {
 void renderLevelSelectScreen(SDL_Renderer* renderer, const vector<string>& levelFiles, int selectedIndex) {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
-
     renderText(renderer, "Select a Level", SCREEN_WIDTH / 2 - 100, 50);
-    printVector(levelFiles);
 
     for (int i = 0; i < levelFiles.size(); ++i) {
         int reverseIndex = levelFiles.size() - 1 - i;
