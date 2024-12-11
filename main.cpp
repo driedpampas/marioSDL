@@ -94,10 +94,8 @@ void renderText(SDL_Renderer* renderer, const string& text, int x, int y) {
     SDL_Color textColor = { 255, 255, 255, 255 };
     SDL_Surface* textSurface = TTF_RenderText_Solid(font, text.c_str(), textColor);
     SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
-    SDL_Rect renderQuad = { x, y, textSurface->w, textSurface->h };
-    SDL_RenderCopy(renderer, textTexture, nullptr, &renderQuad);
-    SDL_FreeSurface(textSurface);
-    SDL_DestroyTexture(textTexture);
+    SDL_Rect textRect = { x, y, textSurface->w, textSurface->h };
+    SDL_RenderCopy(renderer, textTexture, nullptr, &textRect);
 }
 
 void renderWinningScreen(SDL_Renderer* renderer) {
@@ -120,15 +118,26 @@ vector<string> getLevelFiles(const string& folderPath) {
     return levelFiles;
 }
 
+int vp =0;
+void printVector(const std::vector<std::string>& vec) {
+    vp += 1;
+    if (vp >1) return;
+    for (const auto& element : vec) {
+        std::cout << element << std::endl;
+    }
+}
+
 void renderLevelSelectScreen(SDL_Renderer* renderer, const vector<string>& levelFiles, int selectedIndex) {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
 
-    renderText(renderer, "Select a Level", SCREEN_WIDTH / 2 - 50, 50);
+    renderText(renderer, "Select a Level", SCREEN_WIDTH / 2 - 100, 50);
+    printVector(levelFiles);
 
     for (int i = 0; i < levelFiles.size(); ++i) {
-        string levelName = levelFiles[i].substr(levelFiles[i].find_last_of("/\\") + 1);
-        if (i == selectedIndex) {
+        int reverseIndex = levelFiles.size() - 1 - i;
+        string levelName = levelFiles[reverseIndex].substr(levelFiles[reverseIndex].find_last_of("/\\") + 1);
+        if ((levelFiles.size() -1) == selectedIndex) {
             levelName = "> " + levelName;
         }
         renderText(renderer, levelName, SCREEN_WIDTH / 2 - 100, 100 + i * 30);
@@ -172,6 +181,7 @@ int main(int argc, char* args[]) {
     vector<string> levelFiles = getLevelFiles("../levels");
     int selectedIndex = 0;
     GameState gameState = LEVEL_SELECT;
+    renderLevelSelectScreen(renderer, levelFiles, selectedIndex);
 
     bool quit = false;
     SDL_Event e;
@@ -182,7 +192,6 @@ int main(int argc, char* args[]) {
                 quit = true;
             }
             if (e.type == SDL_KEYDOWN) {
-
                 if (gameState == LEVEL_SELECT) {
                     switch (e.key.keysym.sym) {
                     case SDLK_w:
@@ -210,9 +219,9 @@ int main(int argc, char* args[]) {
                     }
                 } else if (gameState == WON && e.key.keysym.sym == SDLK_SPACE) {
                     quit = true;
-                } else if (gameState == PLAYING) {
+                } else {
                     SDL_Rect newRect = player.rect;
-                    constexpr int moveSpeed = TILE_SIZE;
+                    int moveSpeed = TILE_SIZE;
 
                     switch (e.key.keysym.sym) {
                     case SDLK_w:
@@ -268,10 +277,7 @@ int main(int argc, char* args[]) {
                 }
             }
         }
-
-        if (gameState == LEVEL_SELECT) {
-            renderLevelSelectScreen(renderer, levelFiles, selectedIndex);
-        } else if (gameState == PLAYING) {
+        if (gameState == PLAYING) {
             if (!isOnPlatform(player, gameObjects, brickTexture) && !isOnVine(player, gameObjects, vineTexture)) {
                 bool atTopOfVine = false;
                 SDL_Rect belowPlayer = player.rect;
