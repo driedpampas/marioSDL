@@ -19,6 +19,23 @@ struct GameObject {
     SDL_Texture* texture;
     SDL_Rect rect;
 };
+enum InamicPoz {
+    S,
+    D
+};
+
+struct Inamic {
+    InamicPoz startPoz;
+};
+
+enum GameState {
+    LEVEL_SELECT,
+    PLAYING,
+    WON
+};
+
+int totalCoins = 0;
+int collectedCoins = 0;
 
 TTF_Font* font = nullptr;
 SDL_Window* window = nullptr;
@@ -38,7 +55,7 @@ void loadLevel(const string& filePath, vector<GameObject>& gameObjects, SDL_Rend
     int y = 0;
     int playerInit = 0;
 
-    while (getline(levelFile, line)) {
+    while (getline(levelFile, line)) { // pune inamici
         for (int x = 0; x < line.length(); ++x) {
             char tile = line[x];
             SDL_Rect rect = { x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE };
@@ -48,6 +65,7 @@ void loadLevel(const string& filePath, vector<GameObject>& gameObjects, SDL_Rend
                 gameObjects.push_back({ vineTexture, rect });
             } else if (tile == '+') {
                 gameObjects.push_back({ starCoinTexture, rect });
+                totalCoins++;
             } else if (tile == '@') {
                 if (++playerInit > 1) {
                     throw runtime_error("Error: Player character initialized more than once!");
@@ -86,26 +104,26 @@ bool isOnPlatform(const GameObject& player, const vector<GameObject>& gameObject
     return false;
 }
 
-enum GameState {
-    LEVEL_SELECT,
-    PLAYING,
-    WON
-};
-
 void renderText(SDL_Renderer* renderer, const string& text, int x, int y) {
     SDL_Color textColor = { 255, 255, 255, 255 };
     SDL_Surface* textSurface = TTF_RenderText_Solid(font, text.c_str(), textColor);
     SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
     SDL_Rect textRect = { x, y, textSurface->w, textSurface->h };
     SDL_RenderCopy(renderer, textTexture, nullptr, &textRect);
+    SDL_FreeSurface(textSurface);
+    SDL_DestroyTexture(textTexture);
 }
 
-void renderWinningScreen(SDL_Renderer* renderer) {
+void renderWinningScreen(SDL_Renderer* renderer, bool isLastLevel) {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
 
-    renderText(renderer, "You Won!", SCREEN_WIDTH / 2 - 50, SCREEN_HEIGHT / 2 - 50);
-    renderText(renderer, "Press Space to end the game", SCREEN_WIDTH / 2 - 150, SCREEN_HEIGHT / 2);
+    renderText(renderer, isLastLevel ? "You have completed the game!" : "You Won!", SCREEN_WIDTH / 2 - 100, SCREEN_HEIGHT / 2 - 50);
+    if (!isLastLevel) {
+        renderText(renderer, "Next Level", SCREEN_WIDTH / 2 - 50, SCREEN_HEIGHT / 2 + 50);
+    } else {
+        renderText(renderer, "Press Space to end the game", SCREEN_WIDTH / 2 - 150, SCREEN_HEIGHT / 2 + 50);
+    }
 
     SDL_RenderPresent(renderer);
 }
@@ -120,26 +138,54 @@ vector<string> getLevelFiles(const string& folderPath) {
     return levelFiles;
 }
 
-void renderLevelSelectScreen(SDL_Renderer* renderer, const vector<string>& levelFiles, int selectedIndex) {
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_RenderClear(renderer);
+bool isPointInRect(int x, int y, const SDL_Rect& rect) {
+    return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
+}
+
+void drawRectOutline(SDL_Renderer* renderer, const SDL_Rect& rect, SDL_Color color) {
+    SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+    SDL_RenderDrawRect(renderer, &rect);
+}
+
+void renderLevelSelectScreen(SDL_Renderer* renderer, const vector<string>& levelFiles, int selectedIndex, vector<SDL_Rect>& levelRects, SDL_Texture* backgroundTexture, TTF_Font* levelFont) {
+    // Render the background
+    SDL_RenderCopy(renderer, backgroundTexture, nullptr, nullptr);
+
+    // Render the title
     renderText(renderer, "Select a Level", SCREEN_WIDTH / 2 - 100, 50);
+
+    levelRects.clear();
+    SDL_Color outlineColor = { 255, 255, 255, 255 }; // White color for the outline
+    SDL_Color hoverColor = { 255, 0, 0, 255 }; // Red color for hover effect
+
+    int mouseX, mouseY;
+    SDL_GetMouseState(&mouseX, &mouseY);
 
     for (int i = 0; i < levelFiles.size(); ++i) {
         int reverseIndex = levelFiles.size() - 1 - i;
         string levelName = levelFiles[reverseIndex].substr(levelFiles[reverseIndex].find_last_of("/\\") + 1);
-        if ((levelFiles.size() -1) == selectedIndex) {
+        if ((levelFiles.size() - 1) == selectedIndex) {
             levelName = "> " + levelName;
         }
-        renderText(renderer, levelName, SCREEN_WIDTH / 2 - 100, 100 + i * 30);
+        int x = SCREEN_WIDTH / 2 - 100;
+        int y = 100 + i * 30;
+        renderText(renderer, levelName, x, y/*, levelFont*/);
+
+        SDL_Rect rect = { x, y, static_cast<int>(levelName.length() * 10), 30 }; // Approximate width
+        levelRects.push_back(rect);
+
+        // Draw hover effect
+        if (isPointInRect(mouseX, mouseY, rect)) {
+            drawRectOutline(renderer, rect, hoverColor);
+        } else {
+            drawRectOutline(renderer, rect, outlineColor);
+        }
     }
 
     SDL_RenderPresent(renderer);
 }
 
-int main(int argc, char* args[]) {
-
-
+int main() {
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
     window = SDL_CreateWindow("Mario", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
@@ -171,6 +217,9 @@ int main(int argc, char* args[]) {
     vector<string> levelFiles = getLevelFiles("../levels");
     int selectedIndex = 0;
     GameState gameState = LEVEL_SELECT;
+    vector<SDL_Rect> levelRects;
+    int currentLevelIndex = 0;
+    bool isLastLevel = false;
 
     bool quit = false;
     SDL_Event e;
@@ -183,28 +232,22 @@ int main(int argc, char* args[]) {
             if (e.type == SDL_KEYDOWN) {
                 if (gameState == LEVEL_SELECT) {
                     switch (e.key.keysym.sym) {
-                    case SDLK_w:
-                        selectedIndex = (selectedIndex > 0) ? selectedIndex - 1 : levelFiles.size() - 1;
-                        break;
-                    case SDLK_s:
-                        selectedIndex = (selectedIndex < levelFiles.size() - 1) ? selectedIndex + 1 : 0;
-                        break;
-                    case SDLK_RETURN:
-                        loadLevel(levelFiles[selectedIndex], gameObjects, renderer, brickTexture, vineTexture, marioTextureLeft, starCoinTexture, player);
-                        gameState = PLAYING;
-                        break;
-                    case SDLK_ESCAPE:
-                        quit = true;
-                        break;
-                    case SDLK_m:
-                        if (musicPlaying) {
-                            Mix_PauseMusic();
-                        } else {
-                            Mix_ResumeMusic();
-                        }
-                        musicPlaying = !musicPlaying;
-                        break;
-                    default: break;
+                        case SDLK_RETURN:
+                            loadLevel(levelFiles[selectedIndex], gameObjects, renderer, brickTexture, vineTexture, marioTextureLeft, starCoinTexture, player);
+                            gameState = PLAYING;
+                            break;
+                        case SDLK_ESCAPE:
+                            quit = true;
+                            break;
+                        case SDLK_m:
+                            if (musicPlaying) {
+                                Mix_PauseMusic();
+                            } else {
+                                Mix_ResumeMusic();
+                            }
+                            musicPlaying = !musicPlaying;
+                            break;
+                        default: break;
                     }
                 } else if (gameState == WON && e.key.keysym.sym == SDLK_SPACE) {
                     quit = true;
@@ -258,17 +301,50 @@ int main(int argc, char* args[]) {
                             collision = true;
                             break;
                         }
+                        if (obj.texture == starCoinTexture && hasIntersection(newRect, obj.rect)) {
+                            collectedCoins++;
+                            gameObjects.erase(remove_if(gameObjects.begin(), gameObjects.end(), [&obj](const GameObject& o) {
+                                return &o == &obj;
+                                }), gameObjects.end());
+                            break;
+                        }
                     }
 
                     if (!collision) {
                         player.rect = newRect;
                     }
                 }
+            } else if (e.type == SDL_MOUSEBUTTONDOWN) {
+                if (gameState == LEVEL_SELECT) {
+                    int mouseX, mouseY;
+                    SDL_GetMouseState(&mouseX, &mouseY);
+                    for (int i = 0; i < levelRects.size(); ++i) {
+                        if (isPointInRect(mouseX, mouseY, levelRects[i])) {
+                            selectedIndex = levelFiles.size() - 1 - i;
+                            loadLevel(levelFiles[selectedIndex], gameObjects, renderer, brickTexture, vineTexture, marioTextureLeft, starCoinTexture, player);
+                            gameState = PLAYING;
+                            break;
+                        }
+                    }
+                } else if (gameState == WON) {
+                    if (isLastLevel) {
+                        quit = true;
+                    } else {
+                        currentLevelIndex++;
+                        if (currentLevelIndex >= levelFiles.size()) {
+                            isLastLevel = true;
+                        } else {
+                            selectedIndex = currentLevelIndex;
+                            loadLevel(levelFiles[selectedIndex], gameObjects, renderer, brickTexture, vineTexture, marioTextureLeft, starCoinTexture, player);
+                            gameState = PLAYING;
+                        }
+                    }
+                }
             }
         }
         if (gameState == LEVEL_SELECT) {
-            renderLevelSelectScreen(renderer, levelFiles, selectedIndex);
-        } if (gameState == PLAYING) {
+            renderLevelSelectScreen(renderer, levelFiles, selectedIndex, levelRects, backgroundTexture, font);
+        } else if (gameState == PLAYING) {
             if (!isOnPlatform(player, gameObjects, brickTexture) && !isOnVine(player, gameObjects, vineTexture)) {
                 bool atTopOfVine = false;
                 SDL_Rect belowPlayer = player.rect;
@@ -299,9 +375,17 @@ int main(int argc, char* args[]) {
             }
             SDL_RenderCopy(renderer, player.texture, nullptr, &player.rect);
 
+            // Render the coin counter
+            string coinText = "Coins: " + to_string(collectedCoins) + "/" + to_string(totalCoins);
+            renderText(renderer, coinText, 10, 10);
+
             SDL_RenderPresent(renderer);
-        } else if (gameState == WON) {
-            renderWinningScreen(renderer);
+
+            if (collectedCoins == totalCoins) {
+                gameState = WON;
+            }
+        } else {
+            renderWinningScreen(renderer, isLastLevel);
         }
     }
 
