@@ -17,7 +17,7 @@ using namespace std::filesystem;
 
 struct GameObject {
     SDL_Texture* texture;
-    SDL_Rect rect;
+    SDL_FRect rect;
 };
 
 enum EnemyPoz {
@@ -27,7 +27,7 @@ enum EnemyPoz {
 
 struct Enemy {
     GameObject gameObject;
-    SDL_Rect path;
+    SDL_FRect path;
     float speed;
     bool movingRight;
 };
@@ -45,7 +45,7 @@ TTF_Font* font = nullptr;
 SDL_Window* window = nullptr;
 SDL_Renderer* renderer = nullptr;
 
-bool hasIntersection(const SDL_Rect* A, const SDL_Rect* B) {
+bool hasIntersectionF(const SDL_FRect* A, const SDL_FRect* B) {
     if (A->x + A->w <= B->x || B->x + B->w <= A->x || A->y + A->h <= B->y || B->y + B->h <= A->y) {
         return false;
     }
@@ -56,14 +56,14 @@ bool hasIntersection(const SDL_Rect* A, const SDL_Rect* B) {
 void loadLevel(const string& filePath, vector<GameObject>& gameObjects, SDL_Renderer* renderer, SDL_Texture* brickTexture, SDL_Texture* vineTexture, SDL_Texture* marioTexture, SDL_Texture* starCoinTexture, SDL_Texture* enemyTexture, vector<Enemy>& enemies, GameObject& player) {
     ifstream levelFile(filePath);
     string line;
-    int y = 0;
+    float y = 0;
     int playerInit = 0;
 
     while (getline(levelFile, line)) {
         vector<int> enemyPositions;
-        for (int x = 0; x < line.length(); ++x) {
+        for (float x = 0; x < line.length(); ++x) {
             char tile = line[x];
-            SDL_Rect rect = { x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE };
+            SDL_FRect rect = { x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE };
             if (tile == '1') {
                 gameObjects.push_back({ brickTexture, rect });
             } else if (tile == '/') {
@@ -84,11 +84,11 @@ void loadLevel(const string& filePath, vector<GameObject>& gameObjects, SDL_Rend
         // Create enemies and their movement paths
         for (size_t i = 0; i < enemyPositions.size(); i += 2) {
             if (i + 1 < enemyPositions.size()) {
-                int startX = enemyPositions[i] * TILE_SIZE;
-                int endX = enemyPositions[i + 1] * TILE_SIZE;
-                SDL_Rect enemyRect = { startX, y * TILE_SIZE, TILE_SIZE, TILE_SIZE };
+                float startX = enemyPositions[i] * TILE_SIZE;
+                float endX = enemyPositions[i + 1] * TILE_SIZE;
+                SDL_FRect enemyRect = { startX, y * TILE_SIZE, TILE_SIZE, TILE_SIZE };
                 GameObject enemy = { enemyTexture, enemyRect };
-                SDL_Rect path = { startX, y * TILE_SIZE, endX - startX, TILE_SIZE };
+                SDL_FRect path = { startX, y * TILE_SIZE, endX - startX, TILE_SIZE };
                 enemies.push_back({ enemy, path, 0.1f, true });
             }
         }
@@ -98,7 +98,7 @@ void loadLevel(const string& filePath, vector<GameObject>& gameObjects, SDL_Rend
 
 void renderEnemies(SDL_Renderer* renderer, const vector<Enemy>& enemies) {
     for (const auto& enemy : enemies) {
-        SDL_RenderCopy(renderer, enemy.gameObject.texture, nullptr, &enemy.gameObject.rect);
+        SDL_RenderCopyF(renderer, enemy.gameObject.texture, nullptr, &enemy.gameObject.rect);
     }
 }
 
@@ -118,8 +118,8 @@ void updateEnemies(vector<Enemy>& enemies) {
     }
 }
 
-bool hasIntersection(const SDL_Rect& a, const SDL_Rect& b) {
-    return hasIntersection(&a, &b);
+bool hasIntersection(const SDL_FRect& a, const SDL_FRect& b) {
+    return hasIntersectionF(&a, &b);
 }
 
 bool isOnVine(const GameObject& player, const vector<GameObject>& gameObjects, SDL_Texture* vineTexture) {
@@ -135,7 +135,7 @@ bool isOnVine(const GameObject& player, const vector<GameObject>& gameObjects, S
 }
 
 bool isOnPlatform(const GameObject& player, const vector<GameObject>& gameObjects, SDL_Texture* brickTexture) {
-    SDL_Rect belowPlayer = player.rect;
+    SDL_FRect belowPlayer = player.rect;
     belowPlayer.y += 1; // Check just below the player
     for (const auto& obj : gameObjects) {
         if (obj.texture == brickTexture && hasIntersection(belowPlayer, obj.rect)) {
@@ -154,12 +154,14 @@ void drawRectOutline(SDL_Renderer* renderer, const SDL_Rect& rect, SDL_Color col
     SDL_RenderDrawRect(renderer, &rect);
 }
 
-void renderText(SDL_Renderer* renderer, const string& text, int x, int y) {
+void renderText(SDL_Renderer* renderer, const string& text, float x, float y) {
     SDL_Color textColor = { 255, 255, 255, 255 };
     SDL_Surface* textSurface = TTF_RenderText_Solid(font, text.c_str(), textColor);
     SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
-    SDL_Rect textRect = { x, y, textSurface->w, textSurface->h };
-    SDL_RenderCopy(renderer, textTexture, nullptr, &textRect);
+    float tsw = textSurface -> w;
+    float tsh = textSurface -> h;
+    SDL_FRect textRect = { x, y, tsw, tsh };
+    SDL_RenderCopyF(renderer, textTexture, nullptr, &textRect);
     SDL_FreeSurface(textSurface);
     SDL_DestroyTexture(textTexture);
 }
@@ -201,7 +203,7 @@ vector<string> getLevelFiles(const string& folderPath) {
 }
 
 void renderLevelSelectScreen(SDL_Renderer* renderer, const vector<string>& levelFiles, int selectedIndex, vector<SDL_Rect>& levelRects, SDL_Texture* backgroundTexture, TTF_Font* levelFont) {
-    SDL_RenderCopy(renderer, backgroundTexture, nullptr, nullptr);
+    SDL_RenderCopyF(renderer, backgroundTexture, nullptr, nullptr);
     renderText(renderer, "Select a Level", SCREEN_WIDTH / 2 - 100, 50);
 
     levelRects.clear();
@@ -300,7 +302,7 @@ int main() {
                 } else if (gameState == WON && e.key.keysym.sym == SDLK_SPACE) {
                     quit = true;
                 } else {
-                    SDL_Rect newRect = player.rect;
+                    SDL_FRect newRect = player.rect;
                     int moveSpeed = TILE_SIZE;
 
                     switch (e.key.keysym.sym) {
@@ -404,7 +406,7 @@ int main() {
         } else if (gameState == PLAYING) {
             if (!isOnPlatform(player, gameObjects, brickTexture) && !isOnVine(player, gameObjects, vineTexture)) {
                 bool atTopOfVine = false;
-                SDL_Rect belowPlayer = player.rect;
+                SDL_FRect belowPlayer = player.rect;
                 belowPlayer.y += 1;
 
                 for (const auto& obj : gameObjects) {
@@ -426,11 +428,11 @@ int main() {
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
             SDL_RenderClear(renderer);
 
-            SDL_RenderCopy(renderer, backgroundTexture, nullptr, nullptr);
+            SDL_RenderCopyF(renderer, backgroundTexture, nullptr, nullptr);
             for (const auto& obj : gameObjects) {
-                SDL_RenderCopy(renderer, obj.texture, nullptr, &obj.rect);
+                SDL_RenderCopyF(renderer, obj.texture, nullptr, &obj.rect);
             }
-            SDL_RenderCopy(renderer, player.texture, nullptr, &player.rect);
+            SDL_RenderCopyF(renderer, player.texture, nullptr, &player.rect);
 
             updateEnemies(enemies);
             renderEnemies(renderer, enemies);
