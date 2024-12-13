@@ -7,6 +7,7 @@
 #include <string>
 #include <fstream>
 #include <filesystem>
+#include <thread>
 
 #define SCREEN_WIDTH 800
 #define SCREEN_HEIGHT 600
@@ -30,13 +31,23 @@ struct Enemy {
     SDL_FRect path;
     float speed;
     bool movingRight;
+    SDL_Texture* textureLeft;
+    SDL_Texture* textureRight;
+    bool useLeftTexture;
+    int switchCounter;
+    int updatesPerSecond;
 };
 
 enum GameState {
     LEVEL_SELECT,
     PLAYING,
-    WON
+    WON,
+    LOST
 };
+
+void delay(int milliseconds) {
+    this_thread::sleep_for(chrono::milliseconds(milliseconds));
+}
 
 int totalCoins = 0;
 int collectedCoins = 0;
@@ -53,7 +64,7 @@ bool hasIntersectionF(const SDL_FRect* A, const SDL_FRect* B) {
     return true;
 }
 
-void loadLevel(const string& filePath, vector<GameObject>& gameObjects, SDL_Renderer* renderer, SDL_Texture* brickTexture, SDL_Texture* vineTexture, SDL_Texture* marioTexture, SDL_Texture* starCoinTexture, SDL_Texture* enemyTexture, vector<Enemy>& enemies, GameObject& player) {
+void loadLevel(const string& filePath, vector<GameObject>& gameObjects, SDL_Renderer* renderer, SDL_Texture* brickTexture, SDL_Texture* vineTexture, SDL_Texture* marioTexture, SDL_Texture* starCoinTexture, SDL_Texture* enemyTextureLeft, SDL_Texture* enemyTextureRight, vector<Enemy>& enemies, GameObject& player) {
     ifstream levelFile(filePath);
     string line;
     float y = 0;
@@ -87,9 +98,9 @@ void loadLevel(const string& filePath, vector<GameObject>& gameObjects, SDL_Rend
                 float startX = enemyPositions[i] * TILE_SIZE;
                 float endX = enemyPositions[i + 1] * TILE_SIZE;
                 SDL_FRect enemyRect = { startX, y * TILE_SIZE, TILE_SIZE, TILE_SIZE };
-                GameObject enemy = { enemyTexture, enemyRect };
+                GameObject enemy = { enemyTextureLeft, enemyRect };
                 SDL_FRect path = { startX, y * TILE_SIZE, endX - startX, TILE_SIZE };
-                enemies.push_back({ enemy, path, 0.1f, true });
+                enemies.push_back({ enemy, path, 0.06f, true, enemyTextureLeft, enemyTextureRight, true, 0, 2 }); // Initialize with updatesPerSecond 2
             }
         }
         ++y;
@@ -114,6 +125,14 @@ void updateEnemies(vector<Enemy>& enemies) {
             if (enemy.gameObject.rect.x <= enemy.path.x) {
                 enemy.movingRight = true;
             }
+        }
+
+        // Alternate between textures based on the updatesPerSecond property
+        enemy.switchCounter++;
+        if (enemy.switchCounter >= 60 / enemy.updatesPerSecond) {
+            enemy.useLeftTexture = !enemy.useLeftTexture;
+            enemy.gameObject.texture = enemy.useLeftTexture ? enemy.textureLeft : enemy.textureRight;
+            enemy.switchCounter = 0;
         }
     }
 }
@@ -192,6 +211,14 @@ void renderWinningScreen(SDL_Renderer* renderer, bool isLastLevel) {
     SDL_RenderPresent(renderer);
 }
 
+void renderLostScreen(SDL_Renderer* renderer) {
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderClear(renderer);
+    renderText(renderer, "You Lost!", SCREEN_WIDTH / 2 - 50, SCREEN_HEIGHT / 2 - 50);
+    renderText(renderer, "Press Space to exit", SCREEN_WIDTH / 2 - 100, SCREEN_HEIGHT / 2);
+    SDL_RenderPresent(renderer);
+}
+
 vector<string> getLevelFiles(const string& folderPath) {
     vector<string> levelFiles;
     for (const auto& entry : directory_iterator(folderPath)) {
@@ -252,7 +279,9 @@ int main() {
     SDL_Texture* marioTextureLeft = IMG_LoadTexture(renderer, "../resources/mario-l.png");
     SDL_Texture* marioTextureRight = IMG_LoadTexture(renderer, "../resources/mario-r.png");
     SDL_Texture* backgroundTexture = IMG_LoadTexture(renderer, "../resources/background.png");
-    SDL_Texture* enemyTexture = IMG_LoadTexture(renderer, "../resources/enemy.png");
+    SDL_Texture* enemyTextureRight = IMG_LoadTexture(renderer, "../resources/enemy-r.png");
+    SDL_Texture* enemyTextureLeft = IMG_LoadTexture(renderer, "../resources/enemy-l.png");
+
 
     if (!brickTexture || !vineTexture || !marioTextureLeft || !marioTextureRight || !backgroundTexture) {
         cerr << "Failed to load textures!" << endl;
@@ -274,6 +303,7 @@ int main() {
     vector<SDL_Rect> levelRects;
     int currentLevelIndex = 0;
     bool isLastLevel = false;
+    bool playerEnemyCollision = false;
 
     bool quit = false;
     SDL_Event e;
@@ -299,7 +329,10 @@ int main() {
                             break;
                         default: break;
                     }
-                } else if (gameState == WON && e.key.keysym.sym == SDLK_SPACE) {
+                } else if (gameState == WON && e.key.keysym.sym == SDLK_SPACE)
+                {
+                    quit = true;
+                } else if (gameState == LOST && e.key.keysym.sym == SDLK_SPACE) {
                     quit = true;
                 } else {
                     SDL_FRect newRect = player.rect;
@@ -374,7 +407,7 @@ int main() {
                             selectedIndex = levelFiles.size() - 1 - i;
                             gameObjects.clear();
                             collectedCoins = 0;
-                            loadLevel(levelFiles[selectedIndex], gameObjects, renderer, brickTexture, vineTexture, marioTextureLeft, starCoinTexture, enemyTexture, enemies, player);
+                            loadLevel(levelFiles[selectedIndex], gameObjects, renderer, brickTexture, vineTexture, marioTextureLeft, starCoinTexture, enemyTextureLeft, enemyTextureRight, enemies, player);
                             gameState = PLAYING;
                             break;
                         }
@@ -393,8 +426,9 @@ int main() {
                         totalCoins = 0;
                         collectedCoins = 0;
                         gameObjects.clear();
+                        enemies.clear();
                         if (currentLevelIndex < levelFiles.size()) {
-                            loadLevel(levelFiles[selectedIndex], gameObjects, renderer, brickTexture, vineTexture, marioTextureLeft, starCoinTexture, enemyTexture, enemies, player);
+                            loadLevel(levelFiles[selectedIndex], gameObjects, renderer, brickTexture, vineTexture, marioTextureLeft, starCoinTexture, enemyTextureLeft, enemyTextureRight, enemies, player);
                             gameState = PLAYING;
                         }
                     }
@@ -404,6 +438,14 @@ int main() {
         if (gameState == LEVEL_SELECT) {
             renderLevelSelectScreen(renderer, levelFiles, selectedIndex, levelRects, backgroundTexture, font);
         } else if (gameState == PLAYING) {
+            for (const auto& enemy : enemies) {
+                if (hasIntersection(player.rect, enemy.gameObject.rect)) {
+                    playerEnemyCollision = true;
+                }
+            }
+            if (playerEnemyCollision) {
+                gameState = LOST;
+            }
             if (!isOnPlatform(player, gameObjects, brickTexture) && !isOnVine(player, gameObjects, vineTexture)) {
                 bool atTopOfVine = false;
                 SDL_FRect belowPlayer = player.rect;
@@ -448,6 +490,8 @@ int main() {
                 }
                 gameState = WON;
             }
+        } else if (gameState == LOST) {
+            renderLostScreen(renderer);
         } else {
             renderWinningScreen(renderer, isLastLevel);
         }
