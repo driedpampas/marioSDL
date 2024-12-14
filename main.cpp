@@ -440,15 +440,7 @@ int main() {
             renderLevelSelectScreen(renderer, levelFiles, selectedIndex, levelRects, backgroundTexture, font);
         } else if (gameState == PLAYING) {
             for (const auto& enemy : enemies) {
-
-                SDL_FRect nextToPlayerRight = player.rect;
-                nextToPlayerRight.x += 1;
-                SDL_FRect nextToPlayerLeft = player.rect;
-                nextToPlayerLeft.x -= 1;
-                if (hasIntersection(nextToPlayerRight, enemy.gameObject.rect) || hasIntersection(nextToPlayerLeft, enemy.gameObject.rect)) {
-                    cout << endl << "has intersect nexttolast tile" << endl;
-                    playerEnemyCollision = false;
-                } else if (hasIntersection(player.rect, enemy.gameObject.rect)) {
+                if (hasIntersection(player.rect, enemy.gameObject.rect)) {
                     playerEnemyCollision = true;
                 }
             }
