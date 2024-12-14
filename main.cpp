@@ -100,7 +100,7 @@ void loadLevel(const string& filePath, vector<GameObject>& gameObjects, SDL_Rend
                 SDL_FRect enemyRect = { startX, y * TILE_SIZE, TILE_SIZE, TILE_SIZE };
                 GameObject enemy = { enemyTextureLeft, enemyRect };
                 SDL_FRect path = { startX, y * TILE_SIZE, endX - startX, TILE_SIZE };
-                enemies.push_back({ enemy, path, 0.06f, true, enemyTextureLeft, enemyTextureRight, true, 0, 2 }); // Initialize with updatesPerSecond 2
+                enemies.push_back({ enemy, path, 0.06f, true, enemyTextureLeft, enemyTextureRight, true, 0, 2 });
             }
         }
         ++y;
@@ -413,21 +413,20 @@ int main() {
                         }
                     }
                 } else if (gameState == WON) {
-                    currentLevelIndex++;
                     int mouseX, mouseY;
                     SDL_GetMouseState(&mouseX, &mouseY);
                     SDL_Rect nextLevelButton = { SCREEN_WIDTH / 2 - 60, SCREEN_HEIGHT / 2 + 40 - 100, 120, 40 };
                     if (isPointInRect(mouseX, mouseY, nextLevelButton)) {
-                        if (currentLevelIndex > levelFiles.size() - 1) {
+                        currentLevelIndex++;
+                        if (currentLevelIndex >= levelFiles.size()) {
                             isLastLevel = true;
                             gameState = WON;
-                            break;
-                        }
-                        totalCoins = 0;
-                        collectedCoins = 0;
-                        gameObjects.clear();
-                        enemies.clear();
-                        if (currentLevelIndex < levelFiles.size()) {
+                        } else {
+                            totalCoins = 0;
+                            collectedCoins = 0;
+                            gameObjects.clear();
+                            enemies.clear();
+                            selectedIndex = currentLevelIndex; // Update selectedIndex to currentLevelIndex
                             loadLevel(levelFiles[selectedIndex], gameObjects, renderer, brickTexture, vineTexture, marioTextureLeft, starCoinTexture, enemyTextureLeft, enemyTextureRight, enemies, player);
                             gameState = PLAYING;
                         }
