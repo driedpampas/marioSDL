@@ -300,7 +300,6 @@ int main() {
     vector<SDL_Rect> levelRects;
     int currentLevelIndex = 0;
     bool isLastLevel = false;
-    bool isOnSafeTile = false;
     bool playerEnemyCollision = false;
 
     bool quit = false;
@@ -441,25 +440,16 @@ int main() {
             renderLevelSelectScreen(renderer, levelFiles, selectedIndex, levelRects, backgroundTexture, font);
         } else if (gameState == PLAYING) {
             for (const auto& enemy : enemies) {
-                // Calculate the last tile in the enemy's path
-                float lastTileX = enemy.path.x + enemy.path.w - TILE_SIZE;
 
-                // Check if the player is standing on the tile next to the last tile in the enemy's path
-                SDL_FRect nextToLastTile = { lastTileX, enemy.path.y, TILE_SIZE, TILE_SIZE };
-                if (hasIntersection(player.rect, nextToLastTile)) {
-                    cout << "Player is on the safe tile!" << endl;
-                    isOnSafeTile = true;
-                    break; // Exit the loop if the player is on the safe tile
-                }
-            }
-
-            if (!isOnSafeTile) {
-                for (const auto& enemy : enemies) {
-                    // Check for collision with the player
-                    if (hasIntersection(player.rect, enemy.gameObject.rect)) {
-                        playerEnemyCollision = true;
-                        break; // Exit the loop if a collision is detected
-                    }
+                SDL_FRect nextToPlayerRight = player.rect;
+                nextToPlayerRight.x += 1;
+                SDL_FRect nextToPlayerLeft = player.rect;
+                nextToPlayerLeft.x -= 1;
+                if (hasIntersection(nextToPlayerRight, enemy.gameObject.rect) || hasIntersection(nextToPlayerLeft, enemy.gameObject.rect)) {
+                    cout << endl << "has intersect nexttolast tile" << endl;
+                    playerEnemyCollision = false;
+                } else if (hasIntersection(player.rect, enemy.gameObject.rect)) {
+                    playerEnemyCollision = true;
                 }
             }
             if (playerEnemyCollision) {
