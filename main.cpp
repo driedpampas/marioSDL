@@ -1,3 +1,4 @@
+#include <any>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_mixer.h>
@@ -34,8 +35,6 @@ struct Enemy {
     SDL_Texture* textureLeft;
     SDL_Texture* textureRight;
     bool useLeftTexture;
-    int switchCounter;
-    int updatesPerSecond;
 };
 
 enum GameState {
@@ -64,7 +63,7 @@ bool hasIntersectionF(const SDL_FRect* A, const SDL_FRect* B) {
     return true;
 }
 
-void loadLevel(const string& filePath, vector<GameObject>& gameObjects, SDL_Renderer* renderer, SDL_Texture* brickTexture, SDL_Texture* vineTexture, SDL_Texture* marioTexture, SDL_Texture* starCoinTexture, SDL_Texture* enemyTextureLeft, SDL_Texture* enemyTextureRight, vector<Enemy>& enemies, GameObject& player) {
+void loadLevel(const string& filePath, vector<GameObject>& gameObjects, const vector<SDL_Texture*>& textures, vector<Enemy>& enemies, GameObject& player) {
     ifstream levelFile(filePath);
     string line;
     float y = 0;
@@ -72,21 +71,21 @@ void loadLevel(const string& filePath, vector<GameObject>& gameObjects, SDL_Rend
 
     while (getline(levelFile, line)) {
         vector<int> enemyPositions;
-        for (float x = 0; x < line.length(); ++x) {
+        for (int x = 0; x < line.length(); ++x) {
             char tile = line[x];
-            SDL_FRect rect = { x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE };
+            SDL_FRect rect = { static_cast<float>(x * TILE_SIZE), y * TILE_SIZE, TILE_SIZE, TILE_SIZE };
             if (tile == '1') {
-                gameObjects.push_back({ brickTexture, rect });
+                gameObjects.push_back({ textures[0], rect });
             } else if (tile == '/') {
-                gameObjects.push_back({ vineTexture, rect });
+                gameObjects.push_back({ textures[1], rect });
             } else if (tile == '+') {
-                gameObjects.push_back({ starCoinTexture, rect });
-                totalCoins++;
+                gameObjects.push_back({ textures[2], rect });
+                ++totalCoins;
             } else if (tile == '@') {
                 if (++playerInit > 1) {
                     throw runtime_error("Error: Player character initialized more than once!");
                 }
-                player = { marioTexture, rect };
+                player = { textures[3], rect };
             } else if (tile == '$') {
                 enemyPositions.push_back(x);
             }
@@ -98,9 +97,9 @@ void loadLevel(const string& filePath, vector<GameObject>& gameObjects, SDL_Rend
                 float startX = enemyPositions[i] * TILE_SIZE;
                 float endX = enemyPositions[i + 1] * TILE_SIZE;
                 SDL_FRect enemyRect = { startX, y * TILE_SIZE, TILE_SIZE, TILE_SIZE };
-                GameObject enemy = { enemyTextureLeft, enemyRect };
+                GameObject enemy = { textures[6], enemyRect };
                 SDL_FRect path = { startX, y * TILE_SIZE, endX - startX, TILE_SIZE };
-                enemies.push_back({ enemy, path, 0.06f, true, enemyTextureLeft, enemyTextureRight, true, 0, 2 });
+                enemies.push_back({ enemy, path, 0.06f, true, textures[6], textures[7], true });
             }
         }
         ++y;
@@ -115,6 +114,8 @@ void renderEnemies(SDL_Renderer* renderer, const vector<Enemy>& enemies) {
 
 void updateEnemies(vector<Enemy>& enemies) {
     for (auto& enemy : enemies) {
+        float previousX = enemy.gameObject.rect.x;
+
         if (enemy.movingRight) {
             enemy.gameObject.rect.x += enemy.speed;
             if (enemy.gameObject.rect.x >= enemy.path.x + enemy.path.w) {
@@ -127,12 +128,9 @@ void updateEnemies(vector<Enemy>& enemies) {
             }
         }
 
-        // Alternate between textures based on the updatesPerSecond property
-        enemy.switchCounter++;
-        if (enemy.switchCounter >= 60 / enemy.updatesPerSecond) {
+        if (static_cast<int>(previousX / TILE_SIZE) != static_cast<int>(enemy.gameObject.rect.x / TILE_SIZE)) {
             enemy.useLeftTexture = !enemy.useLeftTexture;
             enemy.gameObject.texture = enemy.useLeftTexture ? enemy.textureLeft : enemy.textureRight;
-            enemy.switchCounter = 0;
         }
     }
 }
@@ -195,17 +193,17 @@ void renderWinningScreen(SDL_Renderer* renderer, bool isLastLevel) {
     int mouseX, mouseY;
     SDL_GetMouseState(&mouseX, &mouseY);
 
-    isLastLevel ? renderText(renderer, "You have completed the game!", SCREEN_WIDTH / 2 - 100, SCREEN_HEIGHT / 2 - 50) : renderText(renderer, "You won!", SCREEN_WIDTH / 2 - 55, SCREEN_HEIGHT / 2 - 100);
+    isLastLevel ? renderText(renderer, "You have completed the game!", SCREEN_WIDTH / 2 - 210, SCREEN_HEIGHT / 2 - 50) : renderText(renderer, "You won!", SCREEN_WIDTH / 2 - 55, SCREEN_HEIGHT / 2 - 100);
     if (!isLastLevel) {
-        renderText(renderer, "Next Level", SCREEN_WIDTH / 2 - 60, SCREEN_HEIGHT / 2 + 40 - 100);
-        SDL_Rect nextLevelButton = { SCREEN_WIDTH / 2 - 60, SCREEN_HEIGHT / 2 + 40 - 100, 120, 40 };
+        renderText(renderer, "Next Level", SCREEN_WIDTH / 2 - 70, SCREEN_HEIGHT / 2 + 40 - 100);
+        SDL_Rect nextLevelButton = { SCREEN_WIDTH / 2 - 75, SCREEN_HEIGHT / 2 + 40 - 100, 150, 32 };
         if (isPointInRect(mouseX, mouseY, nextLevelButton)) {
             drawRectOutline(renderer, nextLevelButton, hoverColor);
         } else {
             drawRectOutline(renderer, nextLevelButton, outlineColor);
         }
     } else {
-        renderText(renderer, "Press Space to end the game", SCREEN_WIDTH / 2 - 150, SCREEN_HEIGHT / 2 + 50);
+        renderText(renderer, "Press Space to exit", SCREEN_WIDTH / 2 - 142.5, SCREEN_HEIGHT / 2 + 20);
     }
 
     SDL_RenderPresent(renderer);
@@ -221,6 +219,7 @@ void renderLostScreen(SDL_Renderer* renderer) {
 
 vector<string> getLevelFiles(const string& folderPath) {
     vector<string> levelFiles;
+
     for (const auto& entry : directory_iterator(folderPath)) {
         if (entry.path().extension() == ".lvl") {
             levelFiles.push_back(entry.path().string());
@@ -243,17 +242,14 @@ void renderLevelSelectScreen(SDL_Renderer* renderer, const vector<string>& level
     for (int i = 0; i < levelFiles.size(); ++i) {
         int reverseIndex = levelFiles.size() - 1 - i;
         string levelName = levelFiles[reverseIndex].substr(levelFiles[reverseIndex].find_last_of("/\\") + 1);
-        if ((levelFiles.size() - 1) == selectedIndex) {
-            levelName = "> " + levelName;
-        }
+
         int x = SCREEN_WIDTH / 2 - 100;
         int y = 100 + i * 30;
-        renderText(renderer, levelName, x, y/*, levelFont*/);
+        renderText(renderer, levelName, x, y + ( i * 5));
 
-        SDL_Rect rect = { x, y, static_cast<int>(levelName.length() * 10), 30 }; // Approximate width
+        SDL_Rect rect = { x , y + ( i * 5), static_cast<int>(levelName.length() * 15), 30 };
         levelRects.push_back(rect);
 
-        // Draw hover effect
         if (isPointInRect(mouseX, mouseY, rect)) {
             drawRectOutline(renderer, rect, hoverColor);
         } else {
@@ -271,7 +267,7 @@ int main() {
     IMG_Init(IMG_INIT_PNG);
     Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048);
     TTF_Init();
-    font = TTF_OpenFont("../resources/opensans.ttf", 24);
+    font = TTF_OpenFont("../resources/firacode.ttf", 24);
 
     SDL_Texture* brickTexture = IMG_LoadTexture(renderer, "../resources/brick.png");
     SDL_Texture* vineTexture = IMG_LoadTexture(renderer, "../resources/vine.png");
@@ -279,9 +275,10 @@ int main() {
     SDL_Texture* marioTextureLeft = IMG_LoadTexture(renderer, "../resources/mario-l.png");
     SDL_Texture* marioTextureRight = IMG_LoadTexture(renderer, "../resources/mario-r.png");
     SDL_Texture* backgroundTexture = IMG_LoadTexture(renderer, "../resources/background.png");
-    SDL_Texture* enemyTextureRight = IMG_LoadTexture(renderer, "../resources/enemy-r.png");
     SDL_Texture* enemyTextureLeft = IMG_LoadTexture(renderer, "../resources/enemy-l.png");
+    SDL_Texture* enemyTextureRight = IMG_LoadTexture(renderer, "../resources/enemy-r.png");
 
+    vector textures = { brickTexture, vineTexture, starCoinTexture, marioTextureLeft, marioTextureRight, backgroundTexture, enemyTextureLeft, enemyTextureRight };
 
     if (!brickTexture || !vineTexture || !marioTextureLeft || !marioTextureRight || !backgroundTexture) {
         cerr << "Failed to load textures!" << endl;
@@ -303,6 +300,7 @@ int main() {
     vector<SDL_Rect> levelRects;
     int currentLevelIndex = 0;
     bool isLastLevel = false;
+    bool isOnSafeTile = false;
     bool playerEnemyCollision = false;
 
     bool quit = false;
@@ -365,6 +363,11 @@ int main() {
                         collectedCoins = totalCoins;
                         gameState = WON;
                         break;
+                    case SDLK_o:
+                        collectedCoins = totalCoins;
+                        isLastLevel = true;
+                        gameState = WON;
+                        break;
                     case SDLK_ESCAPE:
                         quit = true;
                         break;
@@ -386,10 +389,10 @@ int main() {
                             break;
                         }
                         if (obj.texture == starCoinTexture && hasIntersection(newRect, obj.rect)) {
-                            collectedCoins++;
-                            gameObjects.erase(remove_if(gameObjects.begin(), gameObjects.end(), [&obj](const GameObject& o) {
+                            ++collectedCoins;
+                            erase_if(gameObjects, [&obj](const GameObject& o) {
                                 return &o == &obj;
-                                }), gameObjects.end());
+                            });
                             break;
                         }
                     }
@@ -407,7 +410,7 @@ int main() {
                             selectedIndex = levelFiles.size() - 1 - i;
                             gameObjects.clear();
                             collectedCoins = 0;
-                            loadLevel(levelFiles[selectedIndex], gameObjects, renderer, brickTexture, vineTexture, marioTextureLeft, starCoinTexture, enemyTextureLeft, enemyTextureRight, enemies, player);
+                            loadLevel(levelFiles[selectedIndex], gameObjects, textures, enemies, player);
                             gameState = PLAYING;
                             break;
                         }
@@ -417,7 +420,7 @@ int main() {
                     SDL_GetMouseState(&mouseX, &mouseY);
                     SDL_Rect nextLevelButton = { SCREEN_WIDTH / 2 - 60, SCREEN_HEIGHT / 2 + 40 - 100, 120, 40 };
                     if (isPointInRect(mouseX, mouseY, nextLevelButton)) {
-                        currentLevelIndex++;
+                        ++currentLevelIndex;
                         if (currentLevelIndex >= levelFiles.size()) {
                             isLastLevel = true;
                             gameState = WON;
@@ -426,8 +429,8 @@ int main() {
                             collectedCoins = 0;
                             gameObjects.clear();
                             enemies.clear();
-                            selectedIndex = currentLevelIndex; // Update selectedIndex to currentLevelIndex
-                            loadLevel(levelFiles[selectedIndex], gameObjects, renderer, brickTexture, vineTexture, marioTextureLeft, starCoinTexture, enemyTextureLeft, enemyTextureRight, enemies, player);
+                            selectedIndex = levelFiles.size() - currentLevelIndex - 1 ;
+                            loadLevel(levelFiles[selectedIndex], gameObjects, textures, enemies, player);
                             gameState = PLAYING;
                         }
                     }
@@ -438,8 +441,25 @@ int main() {
             renderLevelSelectScreen(renderer, levelFiles, selectedIndex, levelRects, backgroundTexture, font);
         } else if (gameState == PLAYING) {
             for (const auto& enemy : enemies) {
-                if (hasIntersection(player.rect, enemy.gameObject.rect)) {
-                    playerEnemyCollision = true;
+                // Calculate the last tile in the enemy's path
+                float lastTileX = enemy.path.x + enemy.path.w - TILE_SIZE;
+
+                // Check if the player is standing on the tile next to the last tile in the enemy's path
+                SDL_FRect nextToLastTile = { lastTileX, enemy.path.y, TILE_SIZE, TILE_SIZE };
+                if (hasIntersection(player.rect, nextToLastTile)) {
+                    cout << "Player is on the safe tile!" << endl;
+                    isOnSafeTile = true;
+                    break; // Exit the loop if the player is on the safe tile
+                }
+            }
+
+            if (!isOnSafeTile) {
+                for (const auto& enemy : enemies) {
+                    // Check for collision with the player
+                    if (hasIntersection(player.rect, enemy.gameObject.rect)) {
+                        playerEnemyCollision = true;
+                        break; // Exit the loop if a collision is detected
+                    }
                 }
             }
             if (playerEnemyCollision) {
@@ -479,14 +499,13 @@ int main() {
             renderEnemies(renderer, enemies);
 
             string coinText = "Coins: " + to_string(collectedCoins) + "/" + to_string(totalCoins);
-            renderText(renderer, coinText, 10, 10);
+            string atLevel = "Level: " + to_string(currentLevelIndex + 1);
+            renderText(renderer, coinText, 10, SCREEN_HEIGHT - 40);
+            renderText(renderer, atLevel, SCREEN_WIDTH - 124, SCREEN_HEIGHT - 40);
 
             SDL_RenderPresent(renderer);
 
             if (collectedCoins == totalCoins) {
-                if (currentLevelIndex == levelFiles.size() - 1) {
-                    isLastLevel = true;
-                }
                 gameState = WON;
             }
         } else if (gameState == LOST) {
