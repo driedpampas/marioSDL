@@ -44,10 +44,6 @@ enum GameState {
     LOST
 };
 
-void delay(int milliseconds) {
-    this_thread::sleep_for(chrono::milliseconds(milliseconds));
-}
-
 int totalCoins = 0;
 int collectedCoins = 0;
 
@@ -63,6 +59,7 @@ bool hasIntersectionF(const SDL_FRect* A, const SDL_FRect* B) {
     return true;
 }
 
+//NOLINTBEGIN(cppcoreguidelines-narrowing-conversions)
 void loadLevel(const string& filePath, vector<GameObject>& gameObjects, const vector<SDL_Texture*>& textures, vector<Enemy>& enemies, GameObject& player) {
     ifstream levelFile(filePath);
     string line;
@@ -139,7 +136,7 @@ bool hasIntersection(const SDL_FRect& a, const SDL_FRect& b) {
     return hasIntersectionF(&a, &b);
 }
 
-bool isOnVine(const GameObject& player, const vector<GameObject>& gameObjects, SDL_Texture* vineTexture) {
+bool isOnVine(const GameObject& player, const vector<GameObject>& gameObjects, const SDL_Texture* vineTexture) {
     for (const auto& obj : gameObjects) {
         if (obj.texture == vineTexture) {
             return false;
@@ -151,10 +148,10 @@ bool isOnVine(const GameObject& player, const vector<GameObject>& gameObjects, S
     return false;
 }
 
-bool isOnPlatform(const GameObject& player, const vector<GameObject>& gameObjects, SDL_Texture* brickTexture) {
+bool isOnPlatform(const GameObject& player, const vector<GameObject>& gameObjects, const SDL_Texture* brickTexture) {
     SDL_FRect belowPlayer = player.rect;
     belowPlayer.y += 1; // Check just below the player
-    for (const auto& obj : gameObjects) {
+    for (const auto& obj : gameObjects) { //NOLINT(readability-use-anyofallof)
         if (obj.texture == brickTexture && hasIntersection(belowPlayer, obj.rect)) {
             return true;
         }
@@ -183,6 +180,7 @@ void renderText(SDL_Renderer* renderer, const string& text, float x, float y) {
     SDL_DestroyTexture(textTexture);
 }
 
+//NOLINTBEGIN(bugprone-integer-division)
 void renderWinningScreen(SDL_Renderer* renderer, bool isLastLevel) {
     SDL_Color outlineColor = { 255, 255, 255, 255 }; // White color for the outline
     SDL_Color hoverColor = { 0, 255, 0, 255 }; // Red color for hover effect
@@ -259,6 +257,7 @@ void renderLevelSelectScreen(SDL_Renderer* renderer, const vector<string>& level
 
     SDL_RenderPresent(renderer);
 }
+//NOLINTEND(bugprone-integer-division)
 
 int main() {
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
@@ -326,14 +325,11 @@ int main() {
                             break;
                         default: break;
                     }
-                } else if (gameState == WON && e.key.keysym.sym == SDLK_SPACE)
-                {
-                    quit = true;
-                } else if (gameState == LOST && e.key.keysym.sym == SDLK_SPACE) {
+                } else if ((gameState == WON || gameState == LOST) && e.key.keysym.sym == SDLK_SPACE) {
                     quit = true;
                 } else {
                     SDL_FRect newRect = player.rect;
-                    int moveSpeed = TILE_SIZE;
+                    float moveSpeed = TILE_SIZE;
 
                     switch (e.key.keysym.sym) {
                     case SDLK_w:
@@ -510,3 +506,4 @@ int main() {
     SDL_Quit();
     return 0;
 }
+//NOLINTEND(cppcoreguidelines-narrowing-conversions)
