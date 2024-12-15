@@ -266,7 +266,7 @@ int main() {
     IMG_Init(IMG_INIT_PNG);
     Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048);
     TTF_Init();
-    font = TTF_OpenFont("../resources/firacode.ttf", 24);
+    font = TTF_OpenFont("../resources/font/firacode.ttf", 24);
 
     SDL_Texture* brickTexture = IMG_LoadTexture(renderer, "../resources/brick.png");
     SDL_Texture* vineTexture = IMG_LoadTexture(renderer, "../resources/vine.png");
