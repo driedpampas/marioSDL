@@ -493,6 +493,9 @@ int main() {
         } else if (gameState == LOST) {
             renderLostScreen(renderer);
         } else {
+            if (currentLevelIndex >= levelFiles.size() -1 ) {
+                isLastLevel = true;
+            }
             renderWinningScreen(renderer, isLastLevel);
         }
     }
