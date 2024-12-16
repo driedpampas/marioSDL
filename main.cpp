@@ -93,7 +93,7 @@ void loadLevel(const string& filePath, vector<GameObject>& gameObjects, const ve
             if (i + 1 < enemyPositions.size()) {
                 float startX = enemyPositions[i] * TILE_SIZE;
                 float endX = enemyPositions[i + 1] * TILE_SIZE;
-                SDL_FRect enemyRect = { startX, y * TILE_SIZE, TILE_SIZE, TILE_SIZE };
+                SDL_FRect enemyRect = { startX, y * TILE_SIZE, TILE_SIZE - 1, TILE_SIZE - 1 };
                 GameObject enemy = { textures[6], enemyRect };
                 SDL_FRect path = { startX, y * TILE_SIZE, endX - startX, TILE_SIZE };
                 enemies.push_back({ enemy, path, 0.06f, true, textures[6], textures[7], true });
