@@ -51,14 +51,6 @@ TTF_Font* font = nullptr;
 SDL_Window* window = nullptr;
 SDL_Renderer* renderer = nullptr;
 
-bool hasIntersectionF(const SDL_FRect* A, const SDL_FRect* B) {
-    if (A->x + A->w <= B->x || B->x + B->w <= A->x || A->y + A->h <= B->y || B->y + B->h <= A->y) {
-        return false;
-    }
-
-    return true;
-}
-
 //NOLINTBEGIN(cppcoreguidelines-narrowing-conversions)
 void loadLevel(const string& filePath, vector<GameObject>& gameObjects, const vector<SDL_Texture*>& textures, vector<Enemy>& enemies, GameObject& player) {
     ifstream levelFile(filePath);
@@ -103,12 +95,6 @@ void loadLevel(const string& filePath, vector<GameObject>& gameObjects, const ve
     }
 }
 
-void renderEnemies(SDL_Renderer* renderer, const vector<Enemy>& enemies) {
-    for (const auto& enemy : enemies) {
-        SDL_RenderCopyF(renderer, enemy.gameObject.texture, nullptr, &enemy.gameObject.rect);
-    }
-}
-
 void updateEnemies(vector<Enemy>& enemies) {
     for (auto& enemy : enemies) {
         float previousX = enemy.gameObject.rect.x;
@@ -132,8 +118,12 @@ void updateEnemies(vector<Enemy>& enemies) {
     }
 }
 
-bool hasIntersection(const SDL_FRect& a, const SDL_FRect& b) {
-    return hasIntersectionF(&a, &b);
+bool hasIntersection(const SDL_FRect& A, const SDL_FRect& B) {
+    if (A.x + A.w <= B.x || B.x + B.w <= A.x || A.y + A.h <= B.y || B.y + B.h <= A.y) {
+        return false;
+    }
+
+    return true;
 }
 
 bool isOnVine(const GameObject& player, const vector<GameObject>& gameObjects, const SDL_Texture* vineTexture) {
@@ -181,40 +171,6 @@ void renderText(SDL_Renderer* renderer, const string& text, float x, float y) {
 }
 
 //NOLINTBEGIN(bugprone-integer-division)
-void renderWinningScreen(SDL_Renderer* renderer, bool isLastLevel) {
-    SDL_Color outlineColor = { 255, 255, 255, 255 }; // White color for the outline
-    SDL_Color hoverColor = { 0, 255, 0, 255 }; // Red color for hover effect
-
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_RenderClear(renderer);
-
-    int mouseX, mouseY;
-    SDL_GetMouseState(&mouseX, &mouseY);
-
-    isLastLevel ? renderText(renderer, "You have completed the game!", SCREEN_WIDTH / 2 - 210, SCREEN_HEIGHT / 2 - 50) : renderText(renderer, "You won!", SCREEN_WIDTH / 2 - 55, SCREEN_HEIGHT / 2 - 100);
-    if (!isLastLevel) {
-        renderText(renderer, "Next Level", SCREEN_WIDTH / 2 - 70, SCREEN_HEIGHT / 2 + 40 - 100);
-        SDL_Rect nextLevelButton = { SCREEN_WIDTH / 2 - 75, SCREEN_HEIGHT / 2 + 40 - 100, 150, 32 };
-        if (isPointInRect(mouseX, mouseY, nextLevelButton)) {
-            drawRectOutline(renderer, nextLevelButton, hoverColor);
-        } else {
-            drawRectOutline(renderer, nextLevelButton, outlineColor);
-        }
-    } else {
-        renderText(renderer, "Press Space to exit", SCREEN_WIDTH / 2 - 142.5, SCREEN_HEIGHT / 2 + 20);
-    }
-
-    SDL_RenderPresent(renderer);
-}
-
-void renderLostScreen(SDL_Renderer* renderer) {
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_RenderClear(renderer);
-    renderText(renderer, "You Lost!", SCREEN_WIDTH / 2 - 50, SCREEN_HEIGHT / 2 - 50);
-    renderText(renderer, "Press Space to exit", SCREEN_WIDTH / 2 - 100, SCREEN_HEIGHT / 2);
-    SDL_RenderPresent(renderer);
-}
-
 vector<string> getLevelFiles(const string& folderPath) {
     vector<string> levelFiles;
 
@@ -257,7 +213,49 @@ void renderLevelSelectScreen(SDL_Renderer* renderer, const vector<string>& level
 
     SDL_RenderPresent(renderer);
 }
+
+void renderWinningScreen(SDL_Renderer* renderer, bool isLastLevel) {
+    SDL_Color outlineColor = { 255, 255, 255, 255 }; // White color for the outline
+    SDL_Color hoverColor = { 0, 255, 0, 255 }; // Red color for hover effect
+
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderClear(renderer);
+
+    int mouseX, mouseY;
+    SDL_GetMouseState(&mouseX, &mouseY);
+
+    isLastLevel ? renderText(renderer, "You have completed the game!", SCREEN_WIDTH / 2 - 210, SCREEN_HEIGHT / 2 - 50) : renderText(renderer, "You won!", SCREEN_WIDTH / 2 - 55, SCREEN_HEIGHT / 2 - 100);
+    if (!isLastLevel) {
+        renderText(renderer, "Next Level", SCREEN_WIDTH / 2 - 70, SCREEN_HEIGHT / 2 + 40 - 100);
+        SDL_Rect nextLevelButton = { SCREEN_WIDTH / 2 - 75, SCREEN_HEIGHT / 2 + 40 - 100, 150, 32 };
+        if (isPointInRect(mouseX, mouseY, nextLevelButton)) {
+            drawRectOutline(renderer, nextLevelButton, hoverColor);
+        } else {
+            drawRectOutline(renderer, nextLevelButton, outlineColor);
+        }
+    } else {
+        renderText(renderer, "Press Space to exit", SCREEN_WIDTH / 2 - 142.5, SCREEN_HEIGHT / 2 + 20);
+    }
+
+    SDL_RenderPresent(renderer);
+}
+
+void renderLostScreen(SDL_Renderer* renderer) {
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderClear(renderer);
+    renderText(renderer, "You Lost!", SCREEN_WIDTH / 2 - 50, SCREEN_HEIGHT / 2 - 50);
+    renderText(renderer, "Press Space to exit", SCREEN_WIDTH / 2 - 100, SCREEN_HEIGHT / 2);
+    SDL_RenderPresent(renderer);
+}
+
 //NOLINTEND(bugprone-integer-division)
+
+float gravity;
+
+Uint32 gravityCallback(Uint32 interval, void* param) {
+    gravity = 0.3;
+    return 0; // Return 0 to stop the timer
+}
 
 int main() {
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
@@ -286,6 +284,9 @@ int main() {
     }
 
     Mix_Music* soundtrack = Mix_LoadMUS("../resources/soundtrack.mp3");
+    //Mix_Music* wonSound = Mix_LoadMUS("../resources/won.mp3");
+    //Mix_Music* lostSound = Mix_LoadMUS("../resources/lost.mp3");
+    //Mix_Music* coinSound = Mix_LoadMUS("../resources/coin.mp3");
     Mix_PlayMusic(soundtrack, -1);
     bool musicPlaying = true;
 
@@ -334,6 +335,9 @@ int main() {
                     switch (e.key.keysym.sym) {
                     case SDLK_w:
                         newRect.y -= moveSpeed;
+                        gravity = 0.01;
+                        newRect.y -= moveSpeed/2;
+                        SDL_AddTimer(5, gravityCallback, nullptr);
                         break;
                     case SDLK_s:
                         newRect.y += moveSpeed;
@@ -456,7 +460,8 @@ int main() {
                 }
 
                 if (!atTopOfVine) {
-                    int gravity = 1;
+                    if (!gravity) gravity = 0.3;
+
                     player.rect.y += gravity;
                     if (player.rect.y + player.rect.h > SCREEN_HEIGHT) { // imagine falling off the screen :')
                         player.rect.y = SCREEN_HEIGHT - player.rect.h;
@@ -474,7 +479,9 @@ int main() {
             SDL_RenderCopyF(renderer, player.texture, nullptr, &player.rect);
 
             updateEnemies(enemies);
-            renderEnemies(renderer, enemies);
+            for (const auto& enemy : enemies) {
+                SDL_RenderCopyF(renderer, enemy.gameObject.texture, nullptr, &enemy.gameObject.rect);
+            }
 
             string coinText = "Coins: " + to_string(collectedCoins) + "/" + to_string(totalCoins);
             string atLevel = "Level: " + to_string(currentLevelIndex + 1);
