@@ -162,7 +162,7 @@ vector<string> getLevelFiles(const string& folderPath) {
 
 void renderLevelSelectScreen(SDL_Renderer* renderer, const vector<string>& levelFiles, int selectedIndex, vector<SDL_Rect>& levelRects, SDL_Texture* backgroundTexture, TTF_Font* levelFont) {
     SDL_RenderCopyF(renderer, backgroundTexture, nullptr, nullptr);
-    renderText(renderer, "Select a Level", SCREEN_WIDTH / 2 - 100, 50);
+    renderText(renderer, "Select a Level", SCREEN_WIDTH / 2 - 100, 150);
 
     levelRects.clear();
     SDL_Color outlineColor = { 255, 255, 255, 255 }; // White color for the outline
@@ -175,11 +175,11 @@ void renderLevelSelectScreen(SDL_Renderer* renderer, const vector<string>& level
         int reverseIndex = levelFiles.size() - 1 - i;
         string levelName = levelFiles[reverseIndex].substr(levelFiles[reverseIndex].find_last_of("/\\") + 1);
 
-        int x = SCREEN_WIDTH / 2 - 100;
-        int y = 100 + i * 30;
+        int x = SCREEN_WIDTH / 2 - (levelName.length() * 30 / 4);
+        int y = 200 + i * 30;
         renderText(renderer, levelName, x, y + ( i * 5));
 
-        SDL_Rect rect = { x , y + ( i * 5), static_cast<int>(levelName.length() * 15), 30 };
+        SDL_Rect rect = { x - 5 , y + ( i * 5), static_cast<int>(levelName.length() * 15), 30 };
         levelRects.push_back(rect);
 
         if (isPointInRect(mouseX, mouseY, rect)) {
@@ -272,12 +272,6 @@ int main() {
     Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048);
     TTF_Init();
     font = TTF_OpenFont("../resources/font/firacode.ttf", 24);
-
-    int* width;
-    int* height;
-    SDL_GetWindowSize(window, width, height);
-
-    printf("Window width: %d, height: %d\n", *width, *height);
 
     // load me textures
     SDL_Texture* brickTexture = IMG_LoadTexture(renderer, "../resources/brick.png");
