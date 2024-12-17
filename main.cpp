@@ -1,4 +1,3 @@
-#include <any>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_mixer.h>
@@ -226,11 +225,8 @@ void updateEnemies(vector<Enemy>& enemies, const vector<GameObject>& gameObjects
 }
 
 void renderWinningScreen(SDL_Renderer* renderer, bool isLastLevel) {
-    Mix_Chunk* clearSound = Mix_LoadWAV("../resources/sounds/clear.mp3");
-    Mix_Chunk* wonSound = Mix_LoadWAV("../resources/sounds/won.mp3");
     SDL_Color outlineColor = { 255, 255, 255, 255 }; // White color for the outline
     SDL_Color hoverColor = { 0, 255, 0, 255 }; // Green color for hover effect
-    bool playing = true;
 
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
@@ -241,8 +237,6 @@ void renderWinningScreen(SDL_Renderer* renderer, bool isLastLevel) {
     if (isLastLevel) {
         renderText(renderer, "You have completed the game!", SCREEN_WIDTH / 2 - 210, SCREEN_HEIGHT / 2 - 50);
         renderText(renderer, "Press Space to exit", SCREEN_WIDTH / 2 - 142.5, SCREEN_HEIGHT / 2 + 20);
-        Mix_PauseMusic();
-        Mix_PlayChannel(-1, clearSound, 1);
     } else {
         renderText(renderer, "You won!", SCREEN_WIDTH / 2 - 55, SCREEN_HEIGHT / 2 - 100);
         renderText(renderer, "Next Level", SCREEN_WIDTH / 2 - 70, SCREEN_HEIGHT / 2 + 40 - 100);
@@ -252,8 +246,6 @@ void renderWinningScreen(SDL_Renderer* renderer, bool isLastLevel) {
         } else {
             drawRectOutline(renderer, nextLevelButton, outlineColor);
         }
-        Mix_PauseMusic();
-        Mix_PlayChannel(-1, wonSound, 1);
     }
 
     SDL_RenderPresent(renderer);
@@ -262,8 +254,8 @@ void renderWinningScreen(SDL_Renderer* renderer, bool isLastLevel) {
 void renderLostScreen(SDL_Renderer* renderer) {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
-    renderText(renderer, "You Lost!", SCREEN_WIDTH / 2 - 50, SCREEN_HEIGHT / 2 - 50);
-    renderText(renderer, "Press Space to exit", SCREEN_WIDTH / 2 - 100, SCREEN_HEIGHT / 2);
+    renderText(renderer, "You Lost!", SCREEN_WIDTH / 2 - 67.5, SCREEN_HEIGHT / 2 - 50);
+    renderText(renderer, "Press Space to exit", SCREEN_WIDTH / 2 - 142.5, SCREEN_HEIGHT / 2);
     SDL_RenderPresent(renderer);
 }
 
@@ -298,14 +290,16 @@ int main() {
     Mix_Music* soundtrack = Mix_LoadMUS("../resources/sounds/soundtrack.mp3");
     Mix_Music* lostSound = Mix_LoadMUS("../resources/sounds/lost.mp3");
     Mix_Chunk* coinSound = Mix_LoadWAV("../resources/sounds/coin.mp3");
+    Mix_Chunk* clearSound = Mix_LoadWAV("../resources/sounds/clear.mp3");
+    Mix_Chunk* wonSound = Mix_LoadWAV("../resources/sounds/won.mp3");
 
-    Mix_MasterVolume(64);
+    Mix_VolumeMusic(64);
     Mix_PlayMusic(soundtrack, -1);
     bool musicPlaying = true;
+    bool soundPlayed = false;
 
     vector<GameObject> gameObjects;
     vector<Enemy> enemies;
-    bool playerEnemyCollision = false;
     GameObject player{};
     bool isOnGround = true;
     bool canDoubleJump = false;
@@ -419,7 +413,7 @@ int main() {
                             erase_if(gameObjects, [&obj](const GameObject& o) {
                                 return &o == &obj;
                             });
-                            Mix_PlayChannel(-1, coinSound, 0); // Play the coin sound on any available channel
+                            Mix_PlayChannel(0, coinSound, 0); // Play the coin sound on any available channel
                             break;
                         }
                     }
@@ -443,6 +437,7 @@ int main() {
                         }
                     }
                 } else if (gameState == WON) {
+                    Mix_PauseMusic();
                     int mouseX, mouseY;
                     SDL_GetMouseState(&mouseX, &mouseY);
                     SDL_Rect nextLevelButton = { SCREEN_WIDTH / 2 - 60, SCREEN_HEIGHT / 2 + 40 - 100, 120, 40 };
@@ -459,7 +454,9 @@ int main() {
                             selectedIndex = levelFiles.size() - currentLevelIndex - 1;
                             loadLevel(levelFiles[selectedIndex], gameObjects, textures, enemies, player);
                             gameState = PLAYING;
-                            Mix_PlayMusic(soundtrack, -1); // Resume the soundtrack
+                            Mix_ResumeMusic(); // Resume the soundtrack
+                            musicPlaying = true;
+                            soundPlayed = false;
                         }
                     }
                 }
@@ -470,11 +467,8 @@ int main() {
         } else if (gameState == PLAYING) {
             for (const auto& enemy : enemies) {
                 if (hasIntersection(player.rect, enemy.gameObject.rect)) {
-                    playerEnemyCollision = true;
+                    gameState = LOST;
                 }
-            }
-            if (playerEnemyCollision) {
-                gameState = LOST;
             }
             if (isOnPlatform(player, gameObjects, brickTexture)) {
                 isOnGround = true;
@@ -530,20 +524,38 @@ int main() {
                 gameState = WON;
             }
         } else if (gameState == LOST) {
-            Mix_PauseMusic();
-            Mix_PlayMusic(lostSound, 1);
+            if (musicPlaying) {
+                Mix_HaltMusic();
+                Mix_PlayMusic(lostSound, 1);
+                musicPlaying = false;
+            }
             renderLostScreen(renderer);
         } else {
             if (currentLevelIndex >= levelFiles.size() -1 ) {
                 isLastLevel = true;
+                if (!soundPlayed) {
+                    Mix_PauseMusic();
+                    Mix_PlayChannel(-1, clearSound, 0);
+                    soundPlayed = true;
+                }
+            }
+            if (!soundPlayed) {
+                Mix_PauseMusic();
+                Mix_PlayChannel(-1, wonSound, 0);
+                soundPlayed = true;
             }
             renderWinningScreen(renderer, isLastLevel);
         }
     }
 
     Mix_FreeMusic(soundtrack);
-    Mix_FreeChunk(coinSound);
     Mix_FreeMusic(lostSound);
+    Mix_FreeChunk(coinSound);
+    Mix_FreeChunk(clearSound);
+    Mix_FreeChunk(wonSound);
+    for (auto texture : textures) {
+        SDL_DestroyTexture(texture);
+    }
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     TTF_CloseFont(font);
