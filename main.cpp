@@ -14,12 +14,21 @@
 #define SCREEN_HEIGHT 600
 #define TILE_SIZE 40
 
+#define GRAVITY 0.5f
+#define JUMP_SPEED -10.0f
+#define MOVE_SPEED 5.0f
+#define CLIMB_SPEED 3.0f
+
 using namespace std;
 using namespace std::filesystem;
 
 struct GameObject {
     SDL_Texture* texture;
     SDL_FRect rect;
+    float vx, vy;
+    bool onGround;
+    bool canDoubleJump;
+    bool climbing;
 };
 
 enum EnemyPoz {
@@ -74,7 +83,7 @@ void loadLevel(const string& filePath, vector<GameObject>& gameObjects, const ve
                 if (++playerInit > 1) {
                     throw runtime_error("Error: Player character initialized more than once!");
                 }
-                player = { textures[3], rect };
+                player = { textures[3], rect, 0.0f, 0.0f, true, false, false };
             } else if (tile == '$') {
                 enemyPositions.push_back(x);
             }
@@ -191,7 +200,7 @@ void renderLevelSelectScreen(SDL_Renderer* renderer, const vector<string>& level
     SDL_RenderPresent(renderer);
 }
 
-void updateEnemies(vector<Enemy>& enemies, vector<GameObject> gameObjects, GameObject player) {
+void updateEnemies(vector<Enemy>& enemies, const vector<GameObject>& gameObjects, const GameObject& player) {
     for (auto& enemy : enemies) {
         float previousX = enemy.gameObject.rect.x;
 
@@ -216,7 +225,7 @@ void updateEnemies(vector<Enemy>& enemies, vector<GameObject> gameObjects, GameO
         SDL_FRect playerBottom = player.rect;
         playerBottom.y += player.rect.h;
 
-        if ( hasIntersection(playerBottom, enemy.gameObject.rect)) {
+        if (hasIntersection(playerBottom, enemy.gameObject.rect)) {
             erase_if(enemies, [&enemy](const Enemy& o) {
                 return &o == &enemy;
             });
@@ -226,8 +235,11 @@ void updateEnemies(vector<Enemy>& enemies, vector<GameObject> gameObjects, GameO
 }
 
 void renderWinningScreen(SDL_Renderer* renderer, bool isLastLevel) {
+    Mix_Chunk* clearSound = Mix_LoadWAV("../resources/sounds/clear.mp3");
+    Mix_Chunk* wonSound = Mix_LoadWAV("../resources/sounds/won.mp3");
     SDL_Color outlineColor = { 255, 255, 255, 255 }; // White color for the outline
-    SDL_Color hoverColor = { 0, 255, 0, 255 }; // Red color for hover effect
+    SDL_Color hoverColor = { 0, 255, 0, 255 }; // Green color for hover effect
+    bool playing = true;
 
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
@@ -235,8 +247,13 @@ void renderWinningScreen(SDL_Renderer* renderer, bool isLastLevel) {
     int mouseX, mouseY;
     SDL_GetMouseState(&mouseX, &mouseY);
 
-    isLastLevel ? renderText(renderer, "You have completed the game!", SCREEN_WIDTH / 2 - 210, SCREEN_HEIGHT / 2 - 50) : renderText(renderer, "You won!", SCREEN_WIDTH / 2 - 55, SCREEN_HEIGHT / 2 - 100);
-    if (!isLastLevel) {
+    if (isLastLevel) {
+        renderText(renderer, "You have completed the game!", SCREEN_WIDTH / 2 - 210, SCREEN_HEIGHT / 2 - 50);
+        renderText(renderer, "Press Space to exit", SCREEN_WIDTH / 2 - 142.5, SCREEN_HEIGHT / 2 + 20);
+        Mix_PauseMusic();
+        Mix_PlayChannel(-1, clearSound, 1);
+    } else {
+        renderText(renderer, "You won!", SCREEN_WIDTH / 2 - 55, SCREEN_HEIGHT / 2 - 100);
         renderText(renderer, "Next Level", SCREEN_WIDTH / 2 - 70, SCREEN_HEIGHT / 2 + 40 - 100);
         SDL_Rect nextLevelButton = { SCREEN_WIDTH / 2 - 75, SCREEN_HEIGHT / 2 + 40 - 100, 150, 32 };
         if (isPointInRect(mouseX, mouseY, nextLevelButton)) {
@@ -244,8 +261,12 @@ void renderWinningScreen(SDL_Renderer* renderer, bool isLastLevel) {
         } else {
             drawRectOutline(renderer, nextLevelButton, outlineColor);
         }
-    } else {
-        renderText(renderer, "Press Space to exit", SCREEN_WIDTH / 2 - 142.5, SCREEN_HEIGHT / 2 + 20);
+        if (playing)
+        {
+            Mix_PauseMusic();
+            Mix_PlayChannel(-1, wonSound, 1);
+            playing = !playing;
+        }
     }
 
     SDL_RenderPresent(renderer);
@@ -260,13 +281,6 @@ void renderLostScreen(SDL_Renderer* renderer) {
 }
 
 //NOLINTEND(bugprone-integer-division)
-
-float gravity;
-
-Uint32 gravityCallback(Uint32 interval, void* param) {
-    gravity = 1;
-    return 0; // Return 0 to stop the timer
-}
 
 int main() {
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
@@ -294,10 +308,11 @@ int main() {
         return -1;
     }
 
-    Mix_Music* soundtrack = Mix_LoadMUS("../resources/soundtrack.mp3");
-    //Mix_Music* wonSound = Mix_LoadMUS("../resources/won.mp3");
-    //Mix_Music* lostSound = Mix_LoadMUS("../resources/lost.mp3");
-    //Mix_Music* coinSound = Mix_LoadMUS("../resources/coin.mp3");
+    Mix_Music* soundtrack = Mix_LoadMUS("../resources/sounds/soundtrack.mp3");
+    Mix_Music* lostSound = Mix_LoadMUS("../resources/sounds/lost.mp3");
+    Mix_Chunk* coinSound = Mix_LoadWAV("../resources/sounds/coin.mp3");
+
+    Mix_MasterVolume(64);
     Mix_PlayMusic(soundtrack, -1);
     bool musicPlaying = true;
 
@@ -340,25 +355,27 @@ int main() {
                 } else if ((gameState == WON || gameState == LOST) && e.key.keysym.sym == SDLK_SPACE) {
                     quit = true;
                 } else {
-                    SDL_FRect newRect = player.rect;
-                    float moveSpeed = TILE_SIZE;
+                    static Uint32 lastJumpTime = 0;
+                    Uint32 currentTime = SDL_GetTicks();
 
                     switch (e.key.keysym.sym) {
                     case SDLK_w:
-                        newRect.y -= moveSpeed;
-                        gravity = 0.01;
-                        newRect.y -= moveSpeed/2;
-                        SDL_AddTimer(2000, gravityCallback, nullptr);
-                        break;
-                    case SDLK_s:
-                        newRect.y += moveSpeed;
+                        if (player.onGround) {
+                            player.vy = JUMP_SPEED;  // First jump
+                            player.onGround = false;
+                            player.canDoubleJump = true;
+                        } else if (player.canDoubleJump && (currentTime - lastJumpTime) < 250) {
+                            player.vy = JUMP_SPEED;  // Double jump
+                            player.canDoubleJump = false;
+                        }
+                        lastJumpTime = currentTime;
                         break;
                     case SDLK_a:
-                        newRect.x -= moveSpeed;
+                        player.vx = -MOVE_SPEED;
                         player.texture = marioTextureLeft;
                         break;
                     case SDLK_d:
-                        newRect.x += moveSpeed;
+                        player.vx = MOVE_SPEED;
                         player.texture = marioTextureRight;
                         break;
                     case SDLK_m:
@@ -369,46 +386,28 @@ int main() {
                         }
                         musicPlaying = !musicPlaying;
                         break;
-                    case SDLK_p:
-                        collectedCoins = totalCoins;
-                        gameState = WON;
-                        break;
-                    case SDLK_o:
-                        collectedCoins = totalCoins;
-                        isLastLevel = true;
-                        gameState = WON;
-                        break;
                     case SDLK_ESCAPE:
                         quit = true;
                         break;
                     default: break;
                     }
 
+                    player.vy += GRAVITY;  // Apply gravity
+                    player.rect.x += player.vx;
+                    player.rect.y += player.vy;
+
                     // Ensure the player does not go out of the screen's bounds
-                    if (newRect.x < 0) newRect.x = 0;
-                    if (newRect.x + newRect.w > SCREEN_WIDTH) newRect.x = SCREEN_WIDTH - newRect.w;
-                    if (newRect.y < 0) newRect.y = 0;
-                    if (newRect.y + newRect.h > SCREEN_HEIGHT) newRect.y = SCREEN_HEIGHT - newRect.h;
+                    if (player.rect.x < 0) player.rect.x = 0;
+                    if (player.rect.x + player.rect.w > SCREEN_WIDTH) player.rect.x = SCREEN_WIDTH - player.rect.w;
+                    if (player.rect.y < 0) player.rect.y = 0;
+                    if (player.rect.y + player.rect.h > SCREEN_HEIGHT) player.rect.y = SCREEN_HEIGHT - player.rect.h;
 
-                    bool collision = false;
-
-                    // Check for collisions with other game objects
-                    for (const auto& obj : gameObjects) {
-                        if (obj.texture != vineTexture && obj.texture != starCoinTexture && hasIntersection(newRect, obj.rect)) {
-                            collision = true;
-                            break;
-                        }
-                        if (obj.texture == starCoinTexture && hasIntersection(newRect, obj.rect)) {
-                            ++collectedCoins;
-                            erase_if(gameObjects, [&obj](const GameObject& o) {
-                                return &o == &obj;
-                            });
-                            break;
-                        }
-                    }
-
-                    if (!collision) {
-                        player.rect = newRect;
+                    // Check if the player is on the ground
+                    if (player.rect.y + player.rect.h >= SCREEN_HEIGHT) {
+                        player.rect.y = SCREEN_HEIGHT - player.rect.h;
+                        player.vy = 0;
+                        player.onGround = true;
+                        player.canDoubleJump = false;
                     }
                 }
             } else if (e.type == SDL_MOUSEBUTTONDOWN) {
@@ -439,9 +438,10 @@ int main() {
                             collectedCoins = 0;
                             gameObjects.clear();
                             enemies.clear();
-                            selectedIndex = levelFiles.size() - currentLevelIndex - 1 ;
+                            selectedIndex = levelFiles.size() - currentLevelIndex - 1;
                             loadLevel(levelFiles[selectedIndex], gameObjects, textures, enemies, player);
                             gameState = PLAYING;
+                            Mix_PlayMusic(soundtrack, -1); // Resume the soundtrack
                         }
                     }
                 }
@@ -471,7 +471,7 @@ int main() {
                 }
 
                 if (!atTopOfVine) {
-                    if (!gravity) gravity = 0.3;
+                    float gravity = 0.3;
 
                     player.rect.y += gravity;
                     if (player.rect.y + player.rect.h > SCREEN_HEIGHT) { // imagine falling off the screen :')
@@ -505,6 +505,8 @@ int main() {
                 gameState = WON;
             }
         } else if (gameState == LOST) {
+            Mix_PauseMusic();
+            Mix_PlayMusic(lostSound, 1);
             renderLostScreen(renderer);
         } else {
             if (currentLevelIndex >= levelFiles.size() -1 ) {
@@ -515,6 +517,8 @@ int main() {
     }
 
     Mix_FreeMusic(soundtrack);
+    Mix_FreeChunk(coinSound);
+    Mix_FreeMusic(lostSound);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     TTF_CloseFont(font);
