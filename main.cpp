@@ -14,21 +14,12 @@
 #define SCREEN_HEIGHT 600
 #define TILE_SIZE 40
 
-#define GRAVITY 0.5f
-#define JUMP_SPEED -10.0f
-#define MOVE_SPEED 5.0f
-#define CLIMB_SPEED 3.0f
-
 using namespace std;
 using namespace std::filesystem;
 
 struct GameObject {
     SDL_Texture* texture;
     SDL_FRect rect;
-    float vx, vy;
-    bool onGround;
-    bool canDoubleJump;
-    bool climbing;
 };
 
 enum EnemyPoz {
@@ -83,7 +74,7 @@ void loadLevel(const string& filePath, vector<GameObject>& gameObjects, const ve
                 if (++playerInit > 1) {
                     throw runtime_error("Error: Player character initialized more than once!");
                 }
-                player = { textures[3], rect, 0.0f, 0.0f, true, false, false };
+                player = { textures[3], rect };
             } else if (tile == '$') {
                 enemyPositions.push_back(x);
             }
@@ -261,12 +252,8 @@ void renderWinningScreen(SDL_Renderer* renderer, bool isLastLevel) {
         } else {
             drawRectOutline(renderer, nextLevelButton, outlineColor);
         }
-        if (playing)
-        {
-            Mix_PauseMusic();
-            Mix_PlayChannel(-1, wonSound, 1);
-            playing = !playing;
-        }
+        Mix_PauseMusic();
+        Mix_PlayChannel(-1, wonSound, 1);
     }
 
     SDL_RenderPresent(renderer);
@@ -318,7 +305,12 @@ int main() {
 
     vector<GameObject> gameObjects;
     vector<Enemy> enemies;
+    bool playerEnemyCollision = false;
     GameObject player{};
+    bool isOnGround = true;
+    bool canDoubleJump = false;
+    float gravity = 0.3;
+    Uint32 lastJumpTime = 0;
 
     vector<string> levelFiles = getLevelFiles("../levels");
     int selectedIndex = 0;
@@ -326,10 +318,10 @@ int main() {
     vector<SDL_Rect> levelRects;
     int currentLevelIndex = 0;
     bool isLastLevel = false;
-    bool playerEnemyCollision = false;
 
     bool quit = false;
     SDL_Event e;
+    Uint32 currentTime = SDL_GetTicks();
 
     while (!quit) {
         while (SDL_PollEvent(&e) != 0) {
@@ -355,27 +347,34 @@ int main() {
                 } else if ((gameState == WON || gameState == LOST) && e.key.keysym.sym == SDLK_SPACE) {
                     quit = true;
                 } else {
-                    static Uint32 lastJumpTime = 0;
-                    Uint32 currentTime = SDL_GetTicks();
+                    SDL_FRect newRect = player.rect;
+                    float moveSpeed = TILE_SIZE;
 
                     switch (e.key.keysym.sym) {
-                    case SDLK_w:
-                        if (player.onGround) {
-                            player.vy = JUMP_SPEED;  // First jump
-                            player.onGround = false;
-                            player.canDoubleJump = true;
-                        } else if (player.canDoubleJump && (currentTime - lastJumpTime) < 250) {
-                            player.vy = JUMP_SPEED;  // Double jump
-                            player.canDoubleJump = false;
+                    case SDLK_SPACE:
+                        if (isOnGround) {
+                            gravity = 0.08;
+                            isOnGround = false;
+                            canDoubleJump = true;
+                            newRect.y -= moveSpeed; // first jump
+                            lastJumpTime = currentTime;
+                        } else if (canDoubleJump && (currentTime - lastJumpTime) < 500) {
+                            newRect.y -= moveSpeed;  // Double jump
+                            canDoubleJump = false;
                         }
-                        lastJumpTime = currentTime;
+                        break;
+                    case SDLK_w:
+                        newRect.y -= moveSpeed;
+                        break;
+                    case SDLK_s:
+                        newRect.y += moveSpeed;
                         break;
                     case SDLK_a:
-                        player.vx = -MOVE_SPEED;
+                        newRect.x -= moveSpeed;
                         player.texture = marioTextureLeft;
                         break;
                     case SDLK_d:
-                        player.vx = MOVE_SPEED;
+                        newRect.x += moveSpeed;
                         player.texture = marioTextureRight;
                         break;
                     case SDLK_m:
@@ -386,28 +385,47 @@ int main() {
                         }
                         musicPlaying = !musicPlaying;
                         break;
+                    case SDLK_p:
+                        collectedCoins = totalCoins;
+                        gameState = WON;
+                        break;
+                    case SDLK_o:
+                        collectedCoins = totalCoins;
+                        isLastLevel = true;
+                        gameState = WON;
+                        break;
                     case SDLK_ESCAPE:
                         quit = true;
                         break;
                     default: break;
                     }
 
-                    player.vy += GRAVITY;  // Apply gravity
-                    player.rect.x += player.vx;
-                    player.rect.y += player.vy;
-
                     // Ensure the player does not go out of the screen's bounds
-                    if (player.rect.x < 0) player.rect.x = 0;
-                    if (player.rect.x + player.rect.w > SCREEN_WIDTH) player.rect.x = SCREEN_WIDTH - player.rect.w;
-                    if (player.rect.y < 0) player.rect.y = 0;
-                    if (player.rect.y + player.rect.h > SCREEN_HEIGHT) player.rect.y = SCREEN_HEIGHT - player.rect.h;
+                    if (newRect.x < 0) newRect.x = 0;
+                    if (newRect.x + newRect.w > SCREEN_WIDTH) newRect.x = SCREEN_WIDTH - newRect.w;
+                    if (newRect.y < 0) newRect.y = 0;
+                    if (newRect.y + newRect.h > SCREEN_HEIGHT) newRect.y = SCREEN_HEIGHT - newRect.h;
 
-                    // Check if the player is on the ground
-                    if (player.rect.y + player.rect.h >= SCREEN_HEIGHT) {
-                        player.rect.y = SCREEN_HEIGHT - player.rect.h;
-                        player.vy = 0;
-                        player.onGround = true;
-                        player.canDoubleJump = false;
+                    bool collision = false;
+
+                    // Check for collisions with other game objects
+                    for (const auto& obj : gameObjects) {
+                        if (obj.texture != vineTexture && obj.texture != starCoinTexture && hasIntersection(newRect, obj.rect)) {
+                            collision = true;
+                            break;
+                        }
+                        if (obj.texture == starCoinTexture && hasIntersection(newRect, obj.rect)) {
+                            ++collectedCoins;
+                            erase_if(gameObjects, [&obj](const GameObject& o) {
+                                return &o == &obj;
+                            });
+                            Mix_PlayChannel(-1, coinSound, 0); // Play the coin sound on any available channel
+                            break;
+                        }
+                    }
+
+                    if (!collision) {
+                        player.rect = newRect;
                     }
                 }
             } else if (e.type == SDL_MOUSEBUTTONDOWN) {
@@ -458,6 +476,12 @@ int main() {
             if (playerEnemyCollision) {
                 gameState = LOST;
             }
+            if (isOnPlatform(player, gameObjects, brickTexture)) {
+                isOnGround = true;
+                gravity = 0.3;
+            } else {
+                isOnGround = false;
+            }
             if (!isOnPlatform(player, gameObjects, brickTexture) && !isOnVine(player, gameObjects, vineTexture)) {
                 bool atTopOfVine = false;
                 SDL_FRect belowPlayer = player.rect;
@@ -471,8 +495,9 @@ int main() {
                 }
 
                 if (!atTopOfVine) {
-                    float gravity = 0.3;
-
+                    if (currentTime - lastJumpTime > 250) {
+                        gravity = 0.5;
+                    }
                     player.rect.y += gravity;
                     if (player.rect.y + player.rect.h > SCREEN_HEIGHT) { // imagine falling off the screen :')
                         player.rect.y = SCREEN_HEIGHT - player.rect.h;
