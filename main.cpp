@@ -84,7 +84,9 @@ void loadLevel(const string& filePath, vector<GameObject>& gameObjects, const ve
             if (i + 1 < enemyPositions.size()) {
                 float startX = enemyPositions[i] * TILE_SIZE;
                 float endX = enemyPositions[i + 1] * TILE_SIZE;
-                SDL_FRect enemyRect = { startX, y * TILE_SIZE, TILE_SIZE - 1, TILE_SIZE - 1 };
+                float enemySize = TILE_SIZE * 0.75; // 25% smaller than TILE_SIZE
+                float yOffset = TILE_SIZE - enemySize; // Calculate the offset to align to the bottom
+                SDL_FRect enemyRect = { startX, y * TILE_SIZE + yOffset, enemySize, enemySize };
                 GameObject enemy = { textures[6], enemyRect };
                 SDL_FRect path = { startX, y * TILE_SIZE, endX - startX, TILE_SIZE };
                 enemies.push_back({ enemy, path, 0.06f, true, textures[6], textures[7], true });
@@ -293,7 +295,8 @@ int main() {
     Mix_Chunk* clearSound = Mix_LoadWAV("../resources/sounds/clear.mp3");
     Mix_Chunk* wonSound = Mix_LoadWAV("../resources/sounds/won.mp3");
 
-    Mix_VolumeMusic(64);
+    //Mix_VolumeMusic(64);
+    Mix_VolumeMusic(0);
     Mix_PlayMusic(soundtrack, -1);
     bool musicPlaying = true;
     bool soundPlayed = false;
@@ -347,7 +350,7 @@ int main() {
                     switch (e.key.keysym.sym) {
                     case SDLK_SPACE:
                         if (isOnGround) {
-                            gravity = 0.08;
+                            gravity = 0.04;
                             isOnGround = false;
                             canDoubleJump = true;
                             newRect.y -= moveSpeed; // first jump
