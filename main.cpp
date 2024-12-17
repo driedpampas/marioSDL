@@ -264,14 +264,22 @@ void renderLostScreen(SDL_Renderer* renderer) {
 //NOLINTEND(bugprone-integer-division)
 
 int main() {
+    // init stuff
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
-    window = SDL_CreateWindow("Mario", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+    window = SDL_CreateWindow("Mario", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
     IMG_Init(IMG_INIT_PNG);
     Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048);
     TTF_Init();
     font = TTF_OpenFont("../resources/font/firacode.ttf", 24);
 
+    int* width;
+    int* height;
+    SDL_GetWindowSize(window, width, height);
+
+    printf("Window width: %d, height: %d\n", *width, *height);
+
+    // load me textures
     SDL_Texture* brickTexture = IMG_LoadTexture(renderer, "../resources/brick.png");
     SDL_Texture* vineTexture = IMG_LoadTexture(renderer, "../resources/vine.png");
     SDL_Texture* starCoinTexture = IMG_LoadTexture(renderer, "../resources/star-coin.png");
@@ -280,7 +288,6 @@ int main() {
     SDL_Texture* backgroundTexture = IMG_LoadTexture(renderer, "../resources/background.png");
     SDL_Texture* enemyTextureLeft = IMG_LoadTexture(renderer, "../resources/enemy-l.png");
     SDL_Texture* enemyTextureRight = IMG_LoadTexture(renderer, "../resources/enemy-r.png");
-
     vector textures = { brickTexture, vineTexture, starCoinTexture, marioTextureLeft, marioTextureRight, backgroundTexture, enemyTextureLeft, enemyTextureRight };
 
     if (!brickTexture || !vineTexture || !marioTextureLeft || !marioTextureRight || !backgroundTexture) {
@@ -289,18 +296,22 @@ int main() {
         return -1;
     }
 
+    // load me music
     Mix_Music* soundtrack = Mix_LoadMUS("../resources/sounds/soundtrack.mp3");
     Mix_Music* lostSound = Mix_LoadMUS("../resources/sounds/lost.mp3");
     Mix_Chunk* coinSound = Mix_LoadWAV("../resources/sounds/coin.mp3");
     Mix_Chunk* clearSound = Mix_LoadWAV("../resources/sounds/clear.mp3");
     Mix_Chunk* wonSound = Mix_LoadWAV("../resources/sounds/won.mp3");
 
-    //Mix_VolumeMusic(64);
-    Mix_VolumeMusic(0);
+    Mix_VolumeMusic(64);
+    Mix_VolumeChunk(coinSound, 64);
+    Mix_VolumeChunk(clearSound, 64);
+    Mix_VolumeChunk(wonSound, 64);
     Mix_PlayMusic(soundtrack, -1);
     bool musicPlaying = true;
     bool soundPlayed = false;
 
+    // vectors for all GameObjects and Enemies, init player, bools and gravity
     vector<GameObject> gameObjects;
     vector<Enemy> enemies;
     GameObject player{};
@@ -309,6 +320,7 @@ int main() {
     float gravity = 0.3;
     Uint32 lastJumpTime = 0;
 
+    // vector for all the level files, init selected index, game state, level rects, current level index and is last level
     vector<string> levelFiles = getLevelFiles("../levels");
     int selectedIndex = 0;
     GameState gameState = LEVEL_SELECT;
@@ -325,7 +337,7 @@ int main() {
             if (e.type == SDL_QUIT) {
                 quit = true;
             }
-            if (e.type == SDL_KEYDOWN) {
+            if (e.type == SDL_KEYDOWN) { // handle keypresses for each game state
                 if (gameState == LEVEL_SELECT) {
                     switch (e.key.keysym.sym) {
                         case SDLK_ESCAPE:
@@ -425,7 +437,7 @@ int main() {
                         player.rect = newRect;
                     }
                 }
-            } else if (e.type == SDL_MOUSEBUTTONDOWN) {
+            } else if (e.type == SDL_MOUSEBUTTONDOWN) { // clicking with the mouse
                 if (gameState == LEVEL_SELECT) {
                     int mouseX, mouseY;
                     SDL_GetMouseState(&mouseX, &mouseY);
@@ -473,13 +485,13 @@ int main() {
                     gameState = LOST;
                 }
             }
-            if (isOnPlatform(player, gameObjects, brickTexture)) {
+            if (isOnPlatform(player, gameObjects, brickTexture)) { // bs fix for jumping
                 isOnGround = true;
                 gravity = 0.3;
             } else {
                 isOnGround = false;
             }
-            if (!isOnPlatform(player, gameObjects, brickTexture) && !isOnVine(player, gameObjects, vineTexture)) {
+            if (!isOnPlatform(player, gameObjects, brickTexture) && !isOnVine(player, gameObjects, vineTexture)) { // apply gravity
                 bool atTopOfVine = false;
                 SDL_FRect belowPlayer = player.rect;
                 belowPlayer.y += 1;
@@ -502,6 +514,7 @@ int main() {
                 }
             }
 
+            // render the screen and all the game objects
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
             SDL_RenderClear(renderer);
 
@@ -516,6 +529,7 @@ int main() {
                 SDL_RenderCopyF(renderer, enemy.gameObject.texture, nullptr, &enemy.gameObject.rect);
             }
 
+            // draw the coin counter and level text
             string coinText = "Coins: " + to_string(collectedCoins) + "/" + to_string(totalCoins);
             string atLevel = "Level: " + to_string(currentLevelIndex + 1);
             renderText(renderer, coinText, 10, SCREEN_HEIGHT - 40);
@@ -529,6 +543,7 @@ int main() {
         } else if (gameState == LOST) {
             if (musicPlaying) {
                 Mix_HaltMusic();
+                Mix_VolumeMusic(64);
                 Mix_PlayMusic(lostSound, 1);
                 musicPlaying = false;
             }
@@ -551,6 +566,7 @@ int main() {
         }
     }
 
+    // free up resources
     Mix_FreeMusic(soundtrack);
     Mix_FreeMusic(lostSound);
     Mix_FreeChunk(coinSound);
