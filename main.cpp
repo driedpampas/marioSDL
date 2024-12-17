@@ -95,29 +95,6 @@ void loadLevel(const string& filePath, vector<GameObject>& gameObjects, const ve
     }
 }
 
-void updateEnemies(vector<Enemy>& enemies) {
-    for (auto& enemy : enemies) {
-        float previousX = enemy.gameObject.rect.x;
-
-        if (enemy.movingRight) {
-            enemy.gameObject.rect.x += enemy.speed;
-            if (enemy.gameObject.rect.x >= enemy.path.x + enemy.path.w) {
-                enemy.movingRight = false;
-            }
-        } else {
-            enemy.gameObject.rect.x -= enemy.speed;
-            if (enemy.gameObject.rect.x <= enemy.path.x) {
-                enemy.movingRight = true;
-            }
-        }
-
-        if (static_cast<int>(previousX / TILE_SIZE) != static_cast<int>(enemy.gameObject.rect.x / TILE_SIZE)) {
-            enemy.useLeftTexture = !enemy.useLeftTexture;
-            enemy.gameObject.texture = enemy.useLeftTexture ? enemy.textureLeft : enemy.textureRight;
-        }
-    }
-}
-
 bool hasIntersection(const SDL_FRect& A, const SDL_FRect& B) {
     if (A.x + A.w <= B.x || B.x + B.w <= A.x || A.y + A.h <= B.y || B.y + B.h <= A.y) {
         return false;
@@ -214,6 +191,40 @@ void renderLevelSelectScreen(SDL_Renderer* renderer, const vector<string>& level
     SDL_RenderPresent(renderer);
 }
 
+void updateEnemies(vector<Enemy>& enemies, vector<GameObject> gameObjects, GameObject player) {
+    for (auto& enemy : enemies) {
+        float previousX = enemy.gameObject.rect.x;
+
+        if (enemy.movingRight) {
+            enemy.gameObject.rect.x += enemy.speed;
+            if (enemy.gameObject.rect.x >= enemy.path.x + enemy.path.w) {
+                enemy.movingRight = false;
+            }
+        } else {
+            enemy.gameObject.rect.x -= enemy.speed;
+            if (enemy.gameObject.rect.x <= enemy.path.x) {
+                enemy.movingRight = true;
+            }
+        }
+
+        if (static_cast<int>(previousX / TILE_SIZE) != static_cast<int>(enemy.gameObject.rect.x / TILE_SIZE)) {
+            enemy.useLeftTexture = !enemy.useLeftTexture;
+            enemy.gameObject.texture = enemy.useLeftTexture ? enemy.textureLeft : enemy.textureRight;
+        }
+
+        // Check if the player intersects with the top of the enemy
+        SDL_FRect playerBottom = player.rect;
+        playerBottom.y += player.rect.h;
+
+        if ( hasIntersection(playerBottom, enemy.gameObject.rect)) {
+            erase_if(enemies, [&enemy](const Enemy& o) {
+                return &o == &enemy;
+            });
+            break;
+        }
+    }
+}
+
 void renderWinningScreen(SDL_Renderer* renderer, bool isLastLevel) {
     SDL_Color outlineColor = { 255, 255, 255, 255 }; // White color for the outline
     SDL_Color hoverColor = { 0, 255, 0, 255 }; // Red color for hover effect
@@ -253,7 +264,7 @@ void renderLostScreen(SDL_Renderer* renderer) {
 float gravity;
 
 Uint32 gravityCallback(Uint32 interval, void* param) {
-    gravity = 0.3;
+    gravity = 1;
     return 0; // Return 0 to stop the timer
 }
 
@@ -337,7 +348,7 @@ int main() {
                         newRect.y -= moveSpeed;
                         gravity = 0.01;
                         newRect.y -= moveSpeed/2;
-                        SDL_AddTimer(5, gravityCallback, nullptr);
+                        SDL_AddTimer(2000, gravityCallback, nullptr);
                         break;
                     case SDLK_s:
                         newRect.y += moveSpeed;
@@ -478,7 +489,7 @@ int main() {
             }
             SDL_RenderCopyF(renderer, player.texture, nullptr, &player.rect);
 
-            updateEnemies(enemies);
+            updateEnemies(enemies, gameObjects, player);
             for (const auto& enemy : enemies) {
                 SDL_RenderCopyF(renderer, enemy.gameObject.texture, nullptr, &enemy.gameObject.rect);
             }
