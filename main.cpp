@@ -21,11 +21,6 @@ struct GameObject {
     SDL_FRect rect;
 };
 
-enum EnemyPoz {
-    S,
-    D
-};
-
 struct Enemy {
     GameObject gameObject;
     SDL_FRect path;
@@ -192,7 +187,7 @@ void renderLevelSelectScreen(SDL_Renderer* renderer, const vector<string>& level
     SDL_RenderPresent(renderer);
 }
 
-void updateEnemies(vector<Enemy>& enemies, const vector<GameObject>& gameObjects, const GameObject& player) {
+void updateEnemies(vector<Enemy>& enemies, const GameObject& player, Mix_Chunk* killSound) {
     for (auto& enemy : enemies) {
         float previousX = enemy.gameObject.rect.x;
 
@@ -218,6 +213,7 @@ void updateEnemies(vector<Enemy>& enemies, const vector<GameObject>& gameObjects
         playerBottom.y += player.rect.h;
 
         if (hasIntersection(playerBottom, enemy.gameObject.rect)) {
+            Mix_PlayChannel(-1, killSound, 0); // Play the kill sound
             erase_if(enemies, [&enemy](const Enemy& o) {
                 return &o == &enemy;
             });
@@ -296,6 +292,9 @@ int main() {
     Mix_Chunk* coinSound = Mix_LoadWAV("../resources/sounds/coin.mp3");
     Mix_Chunk* clearSound = Mix_LoadWAV("../resources/sounds/clear.mp3");
     Mix_Chunk* wonSound = Mix_LoadWAV("../resources/sounds/won.mp3");
+    Mix_Chunk* jumpSound = Mix_LoadWAV("../resources/sounds/jump.mp3");
+    Mix_Chunk* killSound = Mix_LoadWAV("../resources/sounds/kill.mp3");
+    Mix_Chunk* stepSound = Mix_LoadWAV("../resources/sounds/steps.mp3");
 
     Mix_VolumeMusic(64);
     Mix_VolumeChunk(coinSound, 64);
@@ -313,6 +312,8 @@ int main() {
     bool canDoubleJump = false;
     float gravity = 0.3;
     Uint32 lastJumpTime = 0;
+    Uint32 lastStepTime = 0;
+    Uint32 stepCooldown = 685.877;
 
     // vector for all the level files, init selected index, game state, level rects, current level index and is last level
     vector<string> levelFiles = getLevelFiles("../levels");
@@ -324,14 +325,15 @@ int main() {
 
     bool quit = false;
     SDL_Event e;
-    Uint32 currentTime = SDL_GetTicks();
+
 
     while (!quit) {
+        Uint32 currentTime = SDL_GetTicks();
         while (SDL_PollEvent(&e) != 0) {
             if (e.type == SDL_QUIT) {
                 quit = true;
             }
-            if (e.type == SDL_KEYDOWN) { // handle keypresses for each game state
+            if (e.type == SDL_KEYDOWN) { // handle key presses for each game state
                 if (gameState == LEVEL_SELECT) {
                     switch (e.key.keysym.sym) {
                         case SDLK_ESCAPE:
@@ -356,12 +358,14 @@ int main() {
                     switch (e.key.keysym.sym) {
                     case SDLK_SPACE:
                         if (isOnGround) {
+                            Mix_PlayChannel(-1, jumpSound, 0);
                             gravity = 0.04;
                             isOnGround = false;
                             canDoubleJump = true;
                             newRect.y -= moveSpeed; // first jump
                             lastJumpTime = currentTime;
                         } else if (canDoubleJump && (currentTime - lastJumpTime) < 500) {
+                            Mix_PlayChannel(-1, jumpSound, 0);
                             newRect.y -= moveSpeed;  // Double jump
                             canDoubleJump = false;
                         }
@@ -375,10 +379,18 @@ int main() {
                     case SDLK_a:
                         newRect.x -= moveSpeed;
                         player.texture = marioTextureLeft;
+                        if (currentTime - lastStepTime > stepCooldown) {
+                            Mix_PlayChannel(-1, stepSound, 0);
+                            lastStepTime = currentTime;
+                        }
                         break;
                     case SDLK_d:
                         newRect.x += moveSpeed;
                         player.texture = marioTextureRight;
+                        if (currentTime - lastStepTime > stepCooldown) {
+                            Mix_PlayChannel(-1, stepSound, 0);
+                            lastStepTime = currentTime;
+                        }
                         break;
                     case SDLK_m:
                         if (musicPlaying) {
@@ -518,7 +530,7 @@ int main() {
             }
             SDL_RenderCopyF(renderer, player.texture, nullptr, &player.rect);
 
-            updateEnemies(enemies, gameObjects, player);
+            updateEnemies(enemies, player, killSound);
             for (const auto& enemy : enemies) {
                 SDL_RenderCopyF(renderer, enemy.gameObject.texture, nullptr, &enemy.gameObject.rect);
             }
@@ -566,6 +578,9 @@ int main() {
     Mix_FreeChunk(coinSound);
     Mix_FreeChunk(clearSound);
     Mix_FreeChunk(wonSound);
+    Mix_FreeChunk(jumpSound);
+    Mix_FreeChunk(killSound);
+    Mix_FreeChunk(stepSound);
     for (auto texture : textures) {
         SDL_DestroyTexture(texture);
     }
