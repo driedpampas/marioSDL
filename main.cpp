@@ -32,10 +32,12 @@ struct Enemy {
 };
 
 enum GameState {
+    START_SCREEN,
     LEVEL_SELECT,
     PLAYING,
     WON,
-    LOST
+    LOST,
+    DYING
 };
 
 int totalCoins = 0;
@@ -131,16 +133,26 @@ void drawRectOutline(SDL_Renderer* renderer, const SDL_Rect& rect, SDL_Color col
     SDL_RenderDrawRect(renderer, &rect);
 }
 
-void renderText(SDL_Renderer* renderer, const string& text, float x, float y) {
-    SDL_Color textColor = { 255, 255, 255, 255 };
+void renderText(SDL_Renderer* renderer, const string& text, float x, float y, SDL_Color textColor = { 255, 255, 255, 255 }) {
     SDL_Surface* textSurface = TTF_RenderText_Solid(font, text.c_str(), textColor);
     SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
-    float tsw = textSurface -> w;
-    float tsh = textSurface -> h;
-    SDL_FRect textRect = { x, y, tsw, tsh };
+    const float tsw = textSurface -> w;
+    const float tsh = textSurface -> h;
+    const SDL_FRect textRect = { x, y, tsw, tsh };
     SDL_RenderCopyF(renderer, textTexture, nullptr, &textRect);
     SDL_FreeSurface(textSurface);
     SDL_DestroyTexture(textTexture);
+}
+
+void renderButton(SDL_Renderer* renderer, const string& text, const SDL_Rect& rect, SDL_Color color) {
+    SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+    SDL_RenderFillRect(renderer, &rect);
+    constexpr SDL_Color textColor = { 0, 0, 0, 255 }; // Black color for text
+    renderText(renderer, text, rect.x + 10, rect.y + 5, textColor);
+}
+
+bool isButtonClicked(const SDL_Rect& rect, const int mouseX, const int mouseY) {
+    return mouseX >= rect.x && mouseY >= rect.y && mouseX <= rect.x + rect.w && mouseY <= rect.y + rect.h;
 }
 
 //NOLINTBEGIN(bugprone-integer-division)
@@ -203,7 +215,7 @@ void updateEnemies(vector<Enemy>& enemies, const GameObject& player, Mix_Chunk* 
             }
         }
 
-        if (static_cast<int>(previousX / TILE_SIZE) != static_cast<int>(enemy.gameObject.rect.x / TILE_SIZE)) {
+        if (previousX / TILE_SIZE != enemy.gameObject.rect.x / TILE_SIZE) {
             enemy.useLeftTexture = !enemy.useLeftTexture;
             enemy.gameObject.texture = enemy.useLeftTexture ? enemy.textureLeft : enemy.textureRight;
         }
@@ -211,6 +223,10 @@ void updateEnemies(vector<Enemy>& enemies, const GameObject& player, Mix_Chunk* 
         // Check if the player intersects with the top of the enemy
         SDL_FRect playerBottom = player.rect;
         playerBottom.y += player.rect.h;
+        playerBottom.h = 1;
+
+        SDL_FRect enemyTop = enemy.gameObject.rect;
+        enemyTop.h = 1;
 
         if (hasIntersection(playerBottom, enemy.gameObject.rect)) {
             Mix_PlayChannel(-1, killSound, 0); // Play the kill sound
@@ -257,6 +273,20 @@ void renderLostScreen(SDL_Renderer* renderer) {
     SDL_RenderPresent(renderer);
 }
 
+void renderStartScreen(SDL_Renderer* renderer) {
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderClear(renderer);
+    renderText(renderer, "Press Space to start", SCREEN_WIDTH / 2 - 120, SCREEN_HEIGHT / 2 - 50);
+
+    SDL_Rect playButton = { SCREEN_WIDTH / 2 - 50, SCREEN_HEIGHT / 2, 100, 40 };
+    SDL_Rect settingsButton = { SCREEN_WIDTH / 2 - 50, SCREEN_HEIGHT / 2 + 50, 100, 40 };
+
+    SDL_Color buttonColor = { 255, 255, 255, 255 }; // White color for buttons
+    renderButton(renderer, "Play", playButton, buttonColor);
+    renderButton(renderer, "Settings", settingsButton, buttonColor);
+
+    SDL_RenderPresent(renderer);
+}
 //NOLINTEND(bugprone-integer-division)
 
 int main() {
@@ -278,6 +308,8 @@ int main() {
     SDL_Texture* backgroundTexture = IMG_LoadTexture(renderer, "../resources/background.png");
     SDL_Texture* enemyTextureLeft = IMG_LoadTexture(renderer, "../resources/enemy-l.png");
     SDL_Texture* enemyTextureRight = IMG_LoadTexture(renderer, "../resources/enemy-r.png");
+    SDL_Texture* playerLostTexture = IMG_LoadTexture(renderer, "../resources/player-lost.png");
+
     vector textures = { brickTexture, vineTexture, starCoinTexture, marioTextureLeft, marioTextureRight, backgroundTexture, enemyTextureLeft, enemyTextureRight };
 
     if (!brickTexture || !vineTexture || !marioTextureLeft || !marioTextureRight || !backgroundTexture) {
@@ -313,12 +345,12 @@ int main() {
     float gravity = 0.3;
     Uint32 lastJumpTime = 0;
     Uint32 lastStepTime = 0;
-    Uint32 stepCooldown = 685.877;
+    Uint32 dyingStartTime = 0;
 
     // vector for all the level files, init selected index, game state, level rects, current level index and is last level
     vector<string> levelFiles = getLevelFiles("../levels");
     int selectedIndex = 0;
-    GameState gameState = LEVEL_SELECT;
+    GameState gameState = START_SCREEN;
     vector<SDL_Rect> levelRects;
     int currentLevelIndex = 0;
     bool isLastLevel = false;
@@ -351,7 +383,12 @@ int main() {
                     }
                 } else if ((gameState == WON || gameState == LOST) && e.key.keysym.sym == SDLK_SPACE) {
                     quit = true;
-                } else {
+                } else if (gameState == DYING) {
+                    if (e.key.keysym.sym == SDLK_SPACE) {
+                        gameState = LOST;
+                    }
+                } else if (gameState == PLAYING) {
+                    Uint32 stepCooldown = 685.877;
                     SDL_FRect newRect = player.rect;
                     float moveSpeed = TILE_SIZE;
 
@@ -409,6 +446,17 @@ int main() {
                         isLastLevel = true;
                         gameState = WON;
                         break;
+                    case SDLK_l:
+                        if (musicPlaying) {
+                            Mix_HaltMusic();
+                            Mix_VolumeMusic(64);
+                            Mix_PlayMusic(lostSound, 1);
+                            musicPlaying = false;
+                        }
+                        dyingStartTime = currentTime;
+                        player.texture = playerLostTexture;
+                        gameState = DYING;
+                        break;
                     case SDLK_ESCAPE:
                         quit = true;
                         break;
@@ -441,6 +489,10 @@ int main() {
 
                     if (!collision) {
                         player.rect = newRect;
+                    }
+                } else if (gameState == START_SCREEN) {
+                    if (e.key.keysym.sym == SDLK_SPACE) {
+                        gameState = LEVEL_SELECT;
                     }
                 }
             } else if (e.type == SDL_MOUSEBUTTONDOWN) { // clicking with the mouse
@@ -480,20 +532,40 @@ int main() {
                             soundPlayed = false;
                         }
                     }
+                } else if (gameState == START_SCREEN) {
+                    int mouseX, mouseY;
+                    SDL_GetMouseState(&mouseX, &mouseY);
+                    SDL_Rect playButton = { SCREEN_WIDTH / 2 - 50, SCREEN_HEIGHT / 2, 100, 40 };
+                    SDL_Rect settingsButton = { SCREEN_WIDTH / 2 - 50, SCREEN_HEIGHT / 2 + 50, 100, 40 };
+
+                    if (isButtonClicked(playButton, mouseX, mouseY)) {
+                        gameState = LEVEL_SELECT;
+                    } else if (isButtonClicked(settingsButton, mouseX, mouseY)) {
+                        // Handle settings button click
+                    }
                 }
             }
         }
-        if (gameState == LEVEL_SELECT) {
+        if (gameState == START_SCREEN) {
+            renderStartScreen(renderer);
+        } else if (gameState == LEVEL_SELECT) {
             renderLevelSelectScreen(renderer, levelFiles, selectedIndex, levelRects, backgroundTexture, font);
         } else if (gameState == PLAYING) {
             for (const auto& enemy : enemies) {
                 if (hasIntersection(player.rect, enemy.gameObject.rect)) {
-                    gameState = LOST;
+                    if (musicPlaying) {
+                        Mix_HaltMusic();
+                        Mix_VolumeMusic(64);
+                        Mix_PlayMusic(lostSound, 1);
+                        musicPlaying = false;
+                    } dyingStartTime = currentTime;
+                    player.texture = playerLostTexture;
+                    gameState = DYING;
                 }
             }
             if (isOnPlatform(player, gameObjects, brickTexture)) { // bs fix for jumping
                 isOnGround = true;
-                gravity = 0.3;
+                gravity = 0.15;
             } else {
                 isOnGround = false;
             }
@@ -546,13 +618,41 @@ int main() {
             if (collectedCoins == totalCoins) {
                 gameState = WON;
             }
-        } else if (gameState == LOST) {
-            if (musicPlaying) {
-                Mix_HaltMusic();
-                Mix_VolumeMusic(64);
-                Mix_PlayMusic(lostSound, 1);
-                musicPlaying = false;
+        } else if (gameState == DYING) {
+            float dyingDuration = 2000;
+            // ReSharper disable once CppTooWideScopeInitStatement
+            float progress = (currentTime - dyingStartTime) / dyingDuration;
+
+            if (progress >= 1.0f) {
+                gameState = LOST;
+            } else {
+                if (progress < 0.2f) {
+                    player.rect.y += 0;
+                }
+                else if (progress < 0.5f) {
+                    player.rect.y -= 0.02; // Move the player up
+                } else if (progress > 0.5f){
+                    player.rect.y += 0.09; // Move the player down faster
+                }
+
+                SDL_RenderClear(renderer);
+
+                // Render the player and other game objects here
+                SDL_RenderCopyF(renderer, backgroundTexture, nullptr, nullptr);
+                for (const auto& obj : gameObjects) {
+                    SDL_RenderCopyF(renderer, obj.texture, nullptr, &obj.rect);
+                }
+                SDL_RenderCopyF(renderer, player.texture, nullptr, &player.rect);
+
+                // Apply the fade effect
+                Uint8 alpha = progress * 255;
+                SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+                SDL_SetRenderDrawColor(renderer, 0, 0, 0, alpha);
+                SDL_RenderFillRect(renderer, nullptr);
+
+                SDL_RenderPresent(renderer);
             }
+        } else if (gameState == LOST) {
             renderLostScreen(renderer);
         } else {
             if (currentLevelIndex >= levelFiles.size() -1 ) {
