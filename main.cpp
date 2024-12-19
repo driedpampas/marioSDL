@@ -1,3 +1,4 @@
+// ReSharper disable CppParameterMayBeConst
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_mixer.h>
@@ -31,8 +32,15 @@ struct Enemy {
     bool useLeftTexture;
 };
 
+struct Button {
+    string text;
+    float x;
+    float y;
+};
+
 enum GameState {
     START_SCREEN,
+    SETTINGS,
     LEVEL_SELECT,
     PLAYING,
     WON,
@@ -128,9 +136,17 @@ bool isPointInRect(int x, int y, const SDL_Rect& rect) {
     return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
 }
 
+bool isPointInRectF(int x, int y, const SDL_FRect& rect) {
+    return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
+}
+
 void drawRectOutline(SDL_Renderer* renderer, const SDL_Rect& rect, SDL_Color color) {
     SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
     SDL_RenderDrawRect(renderer, &rect);
+}
+
+float calcOffset(int n) {
+    return (n * 30 - n * 5 / 3) / 4; //NOLINT(bugprone-integer-division)
 }
 
 void renderText(SDL_Renderer* renderer, const string& text, float x, float y, SDL_Color textColor = { 255, 255, 255, 255 }) {
@@ -144,18 +160,109 @@ void renderText(SDL_Renderer* renderer, const string& text, float x, float y, SD
     SDL_DestroyTexture(textTexture);
 }
 
-void renderButton(SDL_Renderer* renderer, const string& text, const SDL_Rect& rect, SDL_Color color) {
+//NOLINTBEGIN(bugprone-integer-division)
+int padding = 10;
+
+SDL_FRect buttonRect(const Button& button) {
+    int textWidth, textHeight;
+    TTF_SizeText(font, button.text.c_str(), &textWidth, &textHeight);
+
+    SDL_FRect rect = { button.x - padding, button.y - padding / 2, static_cast<float>(textWidth + padding * 2), static_cast<float>(textHeight + padding) };
+    return rect;
+}
+void renderButton(SDL_Renderer* renderer, const Button& button, SDL_Color color) {
+    int textWidth, textHeight;
+    TTF_SizeText(font, button.text.c_str(), &textWidth, &textHeight);
+
+    // Add padding to the text size to determine the button size
+    SDL_FRect rect = { button.x - padding, button.y - padding / 2, static_cast<float>(textWidth + padding * 2), static_cast<float>(textHeight + padding) };
+
     SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
-    SDL_RenderFillRect(renderer, &rect);
-    constexpr SDL_Color textColor = { 0, 0, 0, 255 }; // Black color for text
-    renderText(renderer, text, rect.x + 10, rect.y + 5, textColor);
+    SDL_RenderFillRectF(renderer, &rect);
+
+    SDL_Color textColor = { 0, 0, 0, 255 }; // Black color for text
+    renderText(renderer, button.text, button.x, button.y, textColor);
 }
 
-bool isButtonClicked(const SDL_Rect& rect, const int mouseX, const int mouseY) {
+bool isButtonClicked(const SDL_FRect& rect, const int mouseX, const int mouseY) {
     return mouseX >= rect.x && mouseY >= rect.y && mouseX <= rect.x + rect.w && mouseY <= rect.y + rect.h;
 }
 
-//NOLINTBEGIN(bugprone-integer-division)
+Button playButton = {"Play", SCREEN_WIDTH / 2 - calcOffset(4), SCREEN_HEIGHT / 2 - 90};
+Button settingsButton = { "Settings", SCREEN_WIDTH / 2 - calcOffset(8), SCREEN_HEIGHT / 2 - 40 };
+
+void renderStartScreen(SDL_Renderer* renderer, SDL_Texture* backgroundTexture) {
+    SDL_RenderClear(renderer);
+
+    SDL_RenderCopyF(renderer, backgroundTexture, nullptr, nullptr);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 64);
+    SDL_RenderFillRect(renderer, nullptr);
+
+    int mouseX, mouseY;
+    SDL_GetMouseState(&mouseX, &mouseY);
+
+    SDL_Color buttonColor = { 255, 255, 255, 128 };
+    SDL_Color buttonHoverColor = { 0, 255, 0, 128 };
+
+    renderText(renderer, "Proiect realizat de Gurzu Matei si Romila Raluca", SCREEN_WIDTH / 2 - calcOffset(48), SCREEN_HEIGHT - 40);
+
+    if (isPointInRectF(mouseX, mouseY, buttonRect(playButton))) {
+        renderButton(renderer, playButton, buttonHoverColor);
+    } else {
+        renderButton(renderer, playButton, buttonColor);
+    }
+    if (isPointInRectF(mouseX, mouseY, buttonRect(settingsButton))) {
+        renderButton(renderer, settingsButton, buttonHoverColor);
+    } else {
+        renderButton(renderer, settingsButton, buttonColor);
+    }
+
+    SDL_RenderPresent(renderer);
+}
+
+void renderSettingsScreen(SDL_Renderer* renderer, SDL_Texture* backgroundTexture) {
+    SDL_RenderClear(renderer);
+
+    SDL_RenderCopyF(renderer, backgroundTexture, nullptr, nullptr);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 64);
+    SDL_RenderFillRect(renderer, nullptr);
+    int mouseX, mouseY;
+    SDL_GetMouseState(&mouseX, &mouseY);
+
+    SDL_Color buttonColor = { 255, 255, 255, 128 };
+    SDL_Color buttonHoverColor = { 0, 255, 0, 128 };
+
+    Button changeTexturesButton = { "Change Textures", SCREEN_WIDTH / 2 - calcOffset(15), SCREEN_HEIGHT / 2 - 90 };
+    Button changeBackgroundButton = { "Change Background", SCREEN_WIDTH / 2 - calcOffset(17), SCREEN_HEIGHT / 2 - 40 };
+    Button characterSelectButton = { "Character Select", SCREEN_WIDTH / 2 - calcOffset(16), SCREEN_HEIGHT / 2 + 10 };
+    Button aboutButton = { "About", SCREEN_WIDTH / 2 - calcOffset(5), SCREEN_HEIGHT / 2 + 60 };
+
+    if (isPointInRectF(mouseX, mouseY, buttonRect(changeTexturesButton))) {
+        renderButton(renderer, changeTexturesButton, buttonHoverColor);
+    } else {
+        renderButton(renderer, changeTexturesButton, buttonColor);
+    }
+    if (isPointInRectF(mouseX, mouseY, buttonRect(changeBackgroundButton))) {
+        renderButton(renderer, changeBackgroundButton, buttonHoverColor);
+    } else {
+        renderButton(renderer, changeBackgroundButton, buttonColor);
+    }
+    if (isPointInRectF(mouseX, mouseY, buttonRect(characterSelectButton))) {
+        renderButton(renderer, characterSelectButton, buttonHoverColor);
+    } else {
+        renderButton(renderer, characterSelectButton, buttonColor);
+    }
+    if (isPointInRectF(mouseX, mouseY, buttonRect(aboutButton))) {
+        renderButton(renderer, aboutButton, buttonHoverColor);
+    } else {
+        renderButton(renderer, aboutButton, buttonColor);
+    }
+
+    SDL_RenderPresent(renderer);
+}
+
 vector<string> getLevelFiles(const string& folderPath) {
     vector<string> levelFiles;
 
@@ -167,8 +274,12 @@ vector<string> getLevelFiles(const string& folderPath) {
     return levelFiles;
 }
 
-void renderLevelSelectScreen(SDL_Renderer* renderer, const vector<string>& levelFiles, int selectedIndex, vector<SDL_Rect>& levelRects, SDL_Texture* backgroundTexture, TTF_Font* levelFont) {
+void renderLevelSelectScreen(SDL_Renderer* renderer, const vector<string>& levelFiles, int selectedIndex, vector<SDL_Rect>& levelRects, SDL_Texture* backgroundTexture) {
     SDL_RenderCopyF(renderer, backgroundTexture, nullptr, nullptr);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 64);
+    SDL_RenderFillRect(renderer, nullptr);
+
     renderText(renderer, "Select a Level", SCREEN_WIDTH / 2 - 100, 150);
 
     levelRects.clear();
@@ -272,21 +383,6 @@ void renderLostScreen(SDL_Renderer* renderer) {
     renderText(renderer, "Press Space to exit", SCREEN_WIDTH / 2 - 142.5, SCREEN_HEIGHT / 2);
     SDL_RenderPresent(renderer);
 }
-
-void renderStartScreen(SDL_Renderer* renderer) {
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_RenderClear(renderer);
-    renderText(renderer, "Press Space to start", SCREEN_WIDTH / 2 - 120, SCREEN_HEIGHT / 2 - 50);
-
-    SDL_Rect playButton = { SCREEN_WIDTH / 2 - 50, SCREEN_HEIGHT / 2, 100, 40 };
-    SDL_Rect settingsButton = { SCREEN_WIDTH / 2 - 50, SCREEN_HEIGHT / 2 + 50, 100, 40 };
-
-    SDL_Color buttonColor = { 255, 255, 255, 255 }; // White color for buttons
-    renderButton(renderer, "Play", playButton, buttonColor);
-    renderButton(renderer, "Settings", settingsButton, buttonColor);
-
-    SDL_RenderPresent(renderer);
-}
 //NOLINTEND(bugprone-integer-division)
 
 int main() {
@@ -303,12 +399,12 @@ int main() {
     SDL_Texture* brickTexture = IMG_LoadTexture(renderer, "../resources/brick.png");
     SDL_Texture* vineTexture = IMG_LoadTexture(renderer, "../resources/vine.png");
     SDL_Texture* starCoinTexture = IMG_LoadTexture(renderer, "../resources/star-coin.png");
-    SDL_Texture* marioTextureLeft = IMG_LoadTexture(renderer, "../resources/mario-l.png");
-    SDL_Texture* marioTextureRight = IMG_LoadTexture(renderer, "../resources/mario-r.png");
+    SDL_Texture* marioTextureLeft = IMG_LoadTexture(renderer, "../resources/player/mario/left.png");
+    SDL_Texture* marioTextureRight = IMG_LoadTexture(renderer, "../resources/player/mario/right.png");
     SDL_Texture* backgroundTexture = IMG_LoadTexture(renderer, "../resources/background.png");
-    SDL_Texture* enemyTextureLeft = IMG_LoadTexture(renderer, "../resources/enemy-l.png");
-    SDL_Texture* enemyTextureRight = IMG_LoadTexture(renderer, "../resources/enemy-r.png");
-    SDL_Texture* playerLostTexture = IMG_LoadTexture(renderer, "../resources/player-lost.png");
+    SDL_Texture* enemyTextureLeft = IMG_LoadTexture(renderer, "../resources/enemy/left.png");
+    SDL_Texture* enemyTextureRight = IMG_LoadTexture(renderer, "../resources/enemy/right.png");
+    SDL_Texture* playerLostTexture = IMG_LoadTexture(renderer, "../resources/player/mario/lost.png");
 
     vector textures = { brickTexture, vineTexture, starCoinTexture, marioTextureLeft, marioTextureRight, backgroundTexture, enemyTextureLeft, enemyTextureRight };
 
@@ -366,7 +462,7 @@ int main() {
                 quit = true;
             }
             if (e.type == SDL_KEYDOWN) { // handle key presses for each game state
-                if (gameState == LEVEL_SELECT) {
+                if (gameState == LEVEL_SELECT || gameState == START_SCREEN) {
                     switch (e.key.keysym.sym) {
                         case SDLK_ESCAPE:
                             quit = true;
@@ -490,10 +586,6 @@ int main() {
                     if (!collision) {
                         player.rect = newRect;
                     }
-                } else if (gameState == START_SCREEN) {
-                    if (e.key.keysym.sym == SDLK_SPACE) {
-                        gameState = LEVEL_SELECT;
-                    }
                 }
             } else if (e.type == SDL_MOUSEBUTTONDOWN) { // clicking with the mouse
                 if (gameState == LEVEL_SELECT) {
@@ -535,21 +627,22 @@ int main() {
                 } else if (gameState == START_SCREEN) {
                     int mouseX, mouseY;
                     SDL_GetMouseState(&mouseX, &mouseY);
-                    SDL_Rect playButton = { SCREEN_WIDTH / 2 - 50, SCREEN_HEIGHT / 2, 100, 40 };
-                    SDL_Rect settingsButton = { SCREEN_WIDTH / 2 - 50, SCREEN_HEIGHT / 2 + 50, 100, 40 };
 
-                    if (isButtonClicked(playButton, mouseX, mouseY)) {
+                    if (isButtonClicked(buttonRect(playButton), mouseX, mouseY)){
                         gameState = LEVEL_SELECT;
-                    } else if (isButtonClicked(settingsButton, mouseX, mouseY)) {
-                        // Handle settings button click
+                    }
+                    if (isButtonClicked(buttonRect(settingsButton), mouseX, mouseY)) {
+                        gameState = SETTINGS;
                     }
                 }
             }
         }
         if (gameState == START_SCREEN) {
-            renderStartScreen(renderer);
+            renderStartScreen(renderer, backgroundTexture);
+        } else if (gameState == SETTINGS) {
+            renderSettingsScreen(renderer, backgroundTexture);
         } else if (gameState == LEVEL_SELECT) {
-            renderLevelSelectScreen(renderer, levelFiles, selectedIndex, levelRects, backgroundTexture, font);
+            renderLevelSelectScreen(renderer, levelFiles, selectedIndex, levelRects, backgroundTexture);
         } else if (gameState == PLAYING) {
             for (const auto& enemy : enemies) {
                 if (hasIntersection(player.rect, enemy.gameObject.rect)) {
