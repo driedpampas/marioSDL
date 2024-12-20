@@ -57,6 +57,8 @@ enum GameState {
 
 int totalCoins = 0;
 int collectedCoins = 0;
+Uint32 levelStartTime = 0;
+const Uint32 levelTimeLimit = 100000;
 
 TTF_Font* font = nullptr;
 SDL_Window* window = nullptr;
@@ -64,6 +66,7 @@ SDL_Renderer* renderer = nullptr;
 
 //NOLINTBEGIN(cppcoreguidelines-narrowing-conversions)
 void loadLevel(const string& filePath, vector<GameObject>& gameObjects, const vector<SDL_Texture*>& textures, vector<Enemy>& enemies, GameObject& player) {
+    levelStartTime = 0;
     ifstream levelFile(filePath);
     string line;
     float y = 0;
@@ -477,6 +480,7 @@ int main() {
     Uint32 lastJumpTime = 0;
     Uint32 lastStepTime = 0;
     Uint32 dyingStartTime = 0;
+    Uint32 levelStartTime = 0;
 
     // vector for all the level files, init selected index, game state, level rects, current level index and is last level
     vector<string> levelFiles = getLevelFiles("../levels");
@@ -652,6 +656,7 @@ int main() {
                             collectedCoins = 0;
                             loadLevel(levelFiles[selectedIndex], gameObjects, textures, enemies, player);
                             gameState = PLAYING;
+                            levelStartTime = 0;
                             break;
                         }
                     }
@@ -712,8 +717,17 @@ int main() {
         } else if (gameState == ABOUT) {
             renderAboutScreen(renderer, backgroundTexture);
         } else if (gameState == LEVEL_SELECT) {
+            levelStartTime = 0;
             renderLevelSelectScreen(renderer, levelFiles, selectedIndex, levelRects, backgroundTexture);
         } else if (gameState == PLAYING) {
+            if (levelStartTime == 0) {
+                levelStartTime = SDL_GetTicks();
+            }
+
+            Uint32 elapsedTime = currentTime - levelStartTime;
+            //cout << "Elapsed time: " << elapsedTime << endl;
+            Uint32 remainingTime = (levelTimeLimit > elapsedTime) ? (levelTimeLimit - elapsedTime) / 1000 : 0;
+
             for (const auto& enemy : enemies) {
                 if (hasIntersection(player.rect, enemy.gameObject.rect)) {
                     if (musicPlaying) {
@@ -770,14 +784,24 @@ int main() {
                 SDL_RenderCopyF(renderer, enemy.gameObject.texture, nullptr, &enemy.gameObject.rect);
             }
 
+            // Render the remaining time on the screen
+            char* timeText = new char[("Time: " + to_string(remainingTime)).length() + 1];
+            strcpy(timeText, ("Time: " + to_string(remainingTime)).c_str());
+
+            renderText(renderer, timeText, SCREEN_WIDTH / 2 - calcOffset(strlen(timeText)), SCREEN_HEIGHT - 32); // NOLINT(*-integer-division)
+            delete[] timeText;
+
             // draw the coin counter and level text
             string coinText = "Coins: " + to_string(collectedCoins) + "/" + to_string(totalCoins);
             string atLevel = "Level: " + to_string(currentLevelIndex + 1);
-            renderText(renderer, coinText, 10, SCREEN_HEIGHT - 40);
-            renderText(renderer, atLevel, SCREEN_WIDTH - 124, SCREEN_HEIGHT - 40);
+            renderText(renderer, coinText, 10, SCREEN_HEIGHT - 32);
+            renderText(renderer, atLevel, SCREEN_WIDTH - 124, SCREEN_HEIGHT - 32);
 
             SDL_RenderPresent(renderer);
 
+            if (elapsedTime > levelTimeLimit) {
+                gameState = LOST;
+            }
             if (collectedCoins == totalCoins) {
                 gameState = WON;
             }
@@ -816,8 +840,10 @@ int main() {
                 SDL_RenderPresent(renderer);
             }
         } else if (gameState == LOST) {
+            levelStartTime = 0;
             renderLostScreen(renderer);
         } else {
+            levelStartTime = 0;
             if (currentLevelIndex >= levelFiles.size() -1 ) {
                 isLastLevel = true;
                 if (!soundPlayed) {
@@ -836,6 +862,7 @@ int main() {
     }
 
     // free up resources
+
     Mix_FreeMusic(soundtrack);
     Mix_FreeMusic(lostSound);
     Mix_FreeChunk(coinSound);
