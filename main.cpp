@@ -1,4 +1,5 @@
 // ReSharper disable CppParameterMayBeConst
+// ReSharper disable CppLocalVariableMayBeConst
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_mixer.h>
@@ -38,14 +39,20 @@ struct Button {
     float y;
 };
 
+enum Character {
+    mario,
+    luigi
+};
+
 enum GameState {
     START_SCREEN,
     SETTINGS,
+    ABOUT,
     LEVEL_SELECT,
     PLAYING,
     WON,
-    LOST,
-    DYING
+    DYING,
+    LOST
 };
 
 int totalCoins = 0;
@@ -145,12 +152,12 @@ void drawRectOutline(SDL_Renderer* renderer, const SDL_Rect& rect, SDL_Color col
     SDL_RenderDrawRect(renderer, &rect);
 }
 
-float calcOffset(int n) {
-    return (n * 30 - n * 5 / 3) / 4; //NOLINT(bugprone-integer-division)
+float calcOffset(float n) {
+    return (n * 30 - n * 5 / 3) / 4;
 }
 
 void renderText(SDL_Renderer* renderer, const string& text, float x, float y, SDL_Color textColor = { 255, 255, 255, 255 }) {
-    SDL_Surface* textSurface = TTF_RenderText_Solid(font, text.c_str(), textColor);
+    SDL_Surface* textSurface = TTF_RenderUTF8_Solid(font, text.c_str(), textColor);
     SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
     const float tsw = textSurface -> w;
     const float tsh = textSurface -> h;
@@ -170,6 +177,7 @@ SDL_FRect buttonRect(const Button& button) {
     SDL_FRect rect = { button.x - padding, button.y - padding / 2, static_cast<float>(textWidth + padding * 2), static_cast<float>(textHeight + padding) };
     return rect;
 }
+
 void renderButton(SDL_Renderer* renderer, const Button& button, SDL_Color color) {
     int textWidth, textHeight;
     TTF_SizeText(font, button.text.c_str(), &textWidth, &textHeight);
@@ -184,20 +192,25 @@ void renderButton(SDL_Renderer* renderer, const Button& button, SDL_Color color)
     renderText(renderer, button.text, button.x, button.y, textColor);
 }
 
+void renderBackgroundWithFadeOut(SDL_Renderer* renderer, SDL_Texture* backgroundTexture, uint alpha = 64) {
+    SDL_RenderCopyF(renderer, backgroundTexture, nullptr, nullptr);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, alpha);
+    SDL_RenderFillRect(renderer, nullptr);
+}
+
 bool isButtonClicked(const SDL_FRect& rect, const int mouseX, const int mouseY) {
     return mouseX >= rect.x && mouseY >= rect.y && mouseX <= rect.x + rect.w && mouseY <= rect.y + rect.h;
 }
 
-Button playButton = {"Play", SCREEN_WIDTH / 2 - calcOffset(4), SCREEN_HEIGHT / 2 - 90};
-Button settingsButton = { "Settings", SCREEN_WIDTH / 2 - calcOffset(8), SCREEN_HEIGHT / 2 - 40 };
+Button playButton = {"Play", SCREEN_WIDTH / 2 - calcOffset(4), SCREEN_HEIGHT / 2 - 16};
+Button settingsButton = { "Settings", SCREEN_WIDTH / 2 - calcOffset(8), SCREEN_HEIGHT / 2 + 32 };
 
 void renderStartScreen(SDL_Renderer* renderer, SDL_Texture* backgroundTexture) {
     SDL_RenderClear(renderer);
+    renderBackgroundWithFadeOut(renderer, backgroundTexture);
 
-    SDL_RenderCopyF(renderer, backgroundTexture, nullptr, nullptr);
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 64);
-    SDL_RenderFillRect(renderer, nullptr);
+    renderText(renderer, "Super Mario", SCREEN_WIDTH / 2 - calcOffset(11), SCREEN_HEIGHT / 2 - 64 );
 
     int mouseX, mouseY;
     SDL_GetMouseState(&mouseX, &mouseY);
@@ -205,60 +218,81 @@ void renderStartScreen(SDL_Renderer* renderer, SDL_Texture* backgroundTexture) {
     SDL_Color buttonColor = { 255, 255, 255, 128 };
     SDL_Color buttonHoverColor = { 0, 255, 0, 128 };
 
-    renderText(renderer, "Proiect realizat de Gurzu Matei si Romila Raluca", SCREEN_WIDTH / 2 - calcOffset(48), SCREEN_HEIGHT - 40);
-
-    if (isPointInRectF(mouseX, mouseY, buttonRect(playButton))) {
+    if (isPointInRectF(mouseX, mouseY, buttonRect(playButton)))
         renderButton(renderer, playButton, buttonHoverColor);
-    } else {
-        renderButton(renderer, playButton, buttonColor);
-    }
-    if (isPointInRectF(mouseX, mouseY, buttonRect(settingsButton))) {
+    renderButton(renderer, playButton, buttonColor);
+
+    if (isPointInRectF(mouseX, mouseY, buttonRect(settingsButton)))
         renderButton(renderer, settingsButton, buttonHoverColor);
-    } else {
-        renderButton(renderer, settingsButton, buttonColor);
-    }
+    renderButton(renderer, settingsButton, buttonColor);
 
     SDL_RenderPresent(renderer);
 }
 
+Button changeCharacterButton = { "Change Character", SCREEN_WIDTH / 2 - calcOffset(16), SCREEN_HEIGHT / 2 - 90 };
+Button changeBackgroundButton = { "Change Background", SCREEN_WIDTH / 2 - calcOffset(17), SCREEN_HEIGHT / 2 - 40 };
+Button aboutButton = { "About", SCREEN_WIDTH / 2 - calcOffset(5), SCREEN_HEIGHT / 2 + 10 };
+
+vector SettingsButtons = { changeCharacterButton, changeBackgroundButton, aboutButton };
+Character playerChar = mario;
+
 void renderSettingsScreen(SDL_Renderer* renderer, SDL_Texture* backgroundTexture) {
     SDL_RenderClear(renderer);
+    renderBackgroundWithFadeOut(renderer, backgroundTexture);
 
-    SDL_RenderCopyF(renderer, backgroundTexture, nullptr, nullptr);
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 64);
-    SDL_RenderFillRect(renderer, nullptr);
     int mouseX, mouseY;
     SDL_GetMouseState(&mouseX, &mouseY);
 
     SDL_Color buttonColor = { 255, 255, 255, 128 };
     SDL_Color buttonHoverColor = { 0, 255, 0, 128 };
 
-    Button changeTexturesButton = { "Change Textures", SCREEN_WIDTH / 2 - calcOffset(15), SCREEN_HEIGHT / 2 - 90 };
-    Button changeBackgroundButton = { "Change Background", SCREEN_WIDTH / 2 - calcOffset(17), SCREEN_HEIGHT / 2 - 40 };
-    Button characterSelectButton = { "Character Select", SCREEN_WIDTH / 2 - calcOffset(16), SCREEN_HEIGHT / 2 + 10 };
-    Button aboutButton = { "About", SCREEN_WIDTH / 2 - calcOffset(5), SCREEN_HEIGHT / 2 + 60 };
+    for (const auto& button : SettingsButtons) {
+        if (isPointInRectF(mouseX, mouseY, buttonRect(button)))
+            renderButton(renderer, button, buttonHoverColor);
+        renderButton(renderer, button, buttonColor);
+    }
 
-    if (isPointInRectF(mouseX, mouseY, buttonRect(changeTexturesButton))) {
-        renderButton(renderer, changeTexturesButton, buttonHoverColor);
-    } else {
-        renderButton(renderer, changeTexturesButton, buttonColor);
+    // Draw the two characters
+    SDL_Texture* marioTexture = IMG_LoadTexture(renderer, "../resources/player/mario/left.png");
+    SDL_Texture* luigiTexture = IMG_LoadTexture(renderer, "../resources/player/luigi/left.png");
+
+    SDL_FRect marioRect = { SCREEN_WIDTH / 2 - 100, SCREEN_HEIGHT / 2 - 180, 50, 50 };
+    SDL_FRect luigiRect = { SCREEN_WIDTH / 2 + 50, SCREEN_HEIGHT / 2 - 180, 50, 50 };
+
+    SDL_RenderCopyF(renderer, marioTexture, nullptr, &marioRect);
+    SDL_RenderCopyF(renderer, luigiTexture, nullptr, &luigiRect);
+
+    // Draw a thick square border around the selected character
+    Character selectedCharacter = (playerChar == mario) ? mario : luigi;
+    selectedCharacter == mario ? SDL_SetRenderDrawColor(renderer, 255, 0, 0, 200) : SDL_SetRenderDrawColor(renderer, 0, 255, 0, 200);
+
+    SDL_FRect selectedRect = (selectedCharacter == mario) ? marioRect : luigiRect;
+    selectedRect.x -= 5;
+    selectedRect.y -= 5;
+    selectedRect.w += 10;
+    selectedRect.h += 10;
+    for (int i = 0; i < 5; ++i) { // Draw a thick border
+        SDL_RenderDrawRectF(renderer, &selectedRect);
+        selectedRect.x -= 2;
+        selectedRect.y -= 2;
+        selectedRect.w += 4;
+        selectedRect.h += 4;
     }
-    if (isPointInRectF(mouseX, mouseY, buttonRect(changeBackgroundButton))) {
-        renderButton(renderer, changeBackgroundButton, buttonHoverColor);
-    } else {
-        renderButton(renderer, changeBackgroundButton, buttonColor);
-    }
-    if (isPointInRectF(mouseX, mouseY, buttonRect(characterSelectButton))) {
-        renderButton(renderer, characterSelectButton, buttonHoverColor);
-    } else {
-        renderButton(renderer, characterSelectButton, buttonColor);
-    }
-    if (isPointInRectF(mouseX, mouseY, buttonRect(aboutButton))) {
-        renderButton(renderer, aboutButton, buttonHoverColor);
-    } else {
-        renderButton(renderer, aboutButton, buttonColor);
-    }
+
+    SDL_DestroyTexture(marioTexture);
+    SDL_DestroyTexture(luigiTexture);
+
+    SDL_RenderPresent(renderer);
+}
+
+void renderAboutScreen(SDL_Renderer* renderer, SDL_Texture* backgroundTexture) {
+    SDL_RenderClear(renderer);
+    renderBackgroundWithFadeOut(renderer, backgroundTexture, 128);
+
+    renderText(renderer, "Project made by Gurzu Matei and Romila Raluca", SCREEN_WIDTH / 2 - calcOffset(45), SCREEN_HEIGHT / 2 - 64);
+    renderText(renderer, "Code licensed under GNU GPL 3.0", SCREEN_WIDTH / 2 - calcOffset(31), SCREEN_HEIGHT / 2);
+    renderText(renderer, "Assets (excluding /resources/font) © Nintendo Co., Ltd.", SCREEN_WIDTH / 2 - calcOffset(55), SCREEN_HEIGHT / 2 + 32);
+    renderText(renderer, "Font licensed under the SIL OFL 1.1", SCREEN_WIDTH / 2 - calcOffset(35), SCREEN_HEIGHT / 2 + 64);
 
     SDL_RenderPresent(renderer);
 }
@@ -394,21 +428,22 @@ int main() {
     Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048);
     TTF_Init();
     font = TTF_OpenFont("../resources/font/firacode.ttf", 24);
+    
+    string playerCharStr = (playerChar == mario) ? "mario" : "luigi";
 
-    // load me textures
     SDL_Texture* brickTexture = IMG_LoadTexture(renderer, "../resources/brick.png");
     SDL_Texture* vineTexture = IMG_LoadTexture(renderer, "../resources/vine.png");
     SDL_Texture* starCoinTexture = IMG_LoadTexture(renderer, "../resources/star-coin.png");
-    SDL_Texture* marioTextureLeft = IMG_LoadTexture(renderer, "../resources/player/mario/left.png");
-    SDL_Texture* marioTextureRight = IMG_LoadTexture(renderer, "../resources/player/mario/right.png");
+    SDL_Texture* playerTextureLeft = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/left.png").c_str());
+    SDL_Texture* playerTextureRight = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/right.png").c_str());
     SDL_Texture* backgroundTexture = IMG_LoadTexture(renderer, "../resources/background.png");
     SDL_Texture* enemyTextureLeft = IMG_LoadTexture(renderer, "../resources/enemy/left.png");
     SDL_Texture* enemyTextureRight = IMG_LoadTexture(renderer, "../resources/enemy/right.png");
-    SDL_Texture* playerLostTexture = IMG_LoadTexture(renderer, "../resources/player/mario/lost.png");
+    SDL_Texture* playerLostTexture = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/lost.png").c_str());
 
-    vector textures = { brickTexture, vineTexture, starCoinTexture, marioTextureLeft, marioTextureRight, backgroundTexture, enemyTextureLeft, enemyTextureRight };
+    vector textures = { brickTexture, vineTexture, starCoinTexture, playerTextureLeft, playerTextureRight, backgroundTexture, enemyTextureLeft, enemyTextureRight };
 
-    if (!brickTexture || !vineTexture || !marioTextureLeft || !marioTextureRight || !backgroundTexture) {
+    if (!brickTexture || !vineTexture || !playerTextureLeft || !playerTextureRight || !backgroundTexture) {
         cerr << "Failed to load textures!" << endl;
         SDL_Quit();
         return -1;
@@ -453,8 +488,7 @@ int main() {
 
     bool quit = false;
     SDL_Event e;
-
-
+    
     while (!quit) {
         Uint32 currentTime = SDL_GetTicks();
         while (SDL_PollEvent(&e) != 0) {
@@ -462,20 +496,39 @@ int main() {
                 quit = true;
             }
             if (e.type == SDL_KEYDOWN) { // handle key presses for each game state
-                if (gameState == LEVEL_SELECT || gameState == START_SCREEN) {
+                switch (e.key.keysym.sym) {
+                    case SDLK_m:
+                        if (musicPlaying) {
+                            Mix_PauseMusic();
+                        } else {
+                            Mix_ResumeMusic();
+                        }
+                        musicPlaying = !musicPlaying;
+                        break;
+                    default: break;
+                }
+                if (gameState == LEVEL_SELECT || gameState == START_SCREEN)
+                {
+                    switch (e.key.keysym.sym) {
+                    case SDLK_ESCAPE:
+                        quit = true;
+                        break;
+                    default: break;
+                    }
+                } else if (gameState == SETTINGS) {
                     switch (e.key.keysym.sym) {
                         case SDLK_ESCAPE:
-                            quit = true;
-                            break;
-                        case SDLK_m:
-                            if (musicPlaying) {
-                                Mix_PauseMusic();
-                            } else {
-                                Mix_ResumeMusic();
-                            }
-                            musicPlaying = !musicPlaying;
+                            gameState = START_SCREEN;
                             break;
                         default: break;
+                    }
+                } else if (gameState == ABOUT) {
+                    switch (e.key.keysym.sym)
+                    {
+                        case SDLK_ESCAPE:
+                            gameState = SETTINGS;
+                            break;
+                        default: ;
                     }
                 } else if ((gameState == WON || gameState == LOST) && e.key.keysym.sym == SDLK_SPACE) {
                     quit = true;
@@ -511,7 +564,7 @@ int main() {
                         break;
                     case SDLK_a:
                         newRect.x -= moveSpeed;
-                        player.texture = marioTextureLeft;
+                        player.texture = playerTextureLeft;
                         if (currentTime - lastStepTime > stepCooldown) {
                             Mix_PlayChannel(-1, stepSound, 0);
                             lastStepTime = currentTime;
@@ -519,7 +572,7 @@ int main() {
                         break;
                     case SDLK_d:
                         newRect.x += moveSpeed;
-                        player.texture = marioTextureRight;
+                        player.texture = playerTextureRight;
                         if (currentTime - lastStepTime > stepCooldown) {
                             Mix_PlayChannel(-1, stepSound, 0);
                             lastStepTime = currentTime;
@@ -588,9 +641,10 @@ int main() {
                     }
                 }
             } else if (e.type == SDL_MOUSEBUTTONDOWN) { // clicking with the mouse
+                int mouseX, mouseY;
+                SDL_GetMouseState(&mouseX, &mouseY);
+                
                 if (gameState == LEVEL_SELECT) {
-                    int mouseX, mouseY;
-                    SDL_GetMouseState(&mouseX, &mouseY);
                     for (int i = 0; i < levelRects.size(); ++i) {
                         if (isPointInRect(mouseX, mouseY, levelRects[i])) {
                             selectedIndex = levelFiles.size() - 1 - i;
@@ -603,8 +657,6 @@ int main() {
                     }
                 } else if (gameState == WON) {
                     Mix_PauseMusic();
-                    int mouseX, mouseY;
-                    SDL_GetMouseState(&mouseX, &mouseY);
                     SDL_Rect nextLevelButton = { SCREEN_WIDTH / 2 - 60, SCREEN_HEIGHT / 2 + 40 - 100, 120, 40 };
                     if (isPointInRect(mouseX, mouseY, nextLevelButton)) {
                         ++currentLevelIndex;
@@ -625,14 +677,30 @@ int main() {
                         }
                     }
                 } else if (gameState == START_SCREEN) {
-                    int mouseX, mouseY;
-                    SDL_GetMouseState(&mouseX, &mouseY);
-
                     if (isButtonClicked(buttonRect(playButton), mouseX, mouseY)){
                         gameState = LEVEL_SELECT;
                     }
                     if (isButtonClicked(buttonRect(settingsButton), mouseX, mouseY)) {
                         gameState = SETTINGS;
+                    }
+                } else if (gameState == SETTINGS) {
+                    if (isButtonClicked(buttonRect(changeCharacterButton), mouseX, mouseY)) {
+                        playerChar = playerChar == mario ? luigi : mario;
+                        // ReSharper disable once CppDFAConstantConditions
+                        // ReSharper disable once CppDFAUnreachableCode
+                        playerCharStr = playerChar == mario ? "mario" : "luigi";
+                        cout << "changed character to " << playerCharStr << endl;
+                        playerTextureLeft = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/left.png").c_str());
+                        playerTextureRight = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/right.png").c_str());
+                        playerLostTexture = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/lost.png").c_str());
+                        textures[3] = playerTextureLeft;
+                        textures[4] = playerTextureRight;
+                        textures[8] = playerTextureLeft;
+                        player.texture = playerTextureLeft;
+                    } else if (isButtonClicked(buttonRect(changeBackgroundButton), mouseX, mouseY)) {
+                        cout << "changed background" << endl;
+                    } else if (isButtonClicked(buttonRect(aboutButton), mouseX, mouseY)) {
+                        gameState = ABOUT;
                     }
                 }
             }
@@ -641,6 +709,8 @@ int main() {
             renderStartScreen(renderer, backgroundTexture);
         } else if (gameState == SETTINGS) {
             renderSettingsScreen(renderer, backgroundTexture);
+        } else if (gameState == ABOUT) {
+            renderAboutScreen(renderer, backgroundTexture);
         } else if (gameState == LEVEL_SELECT) {
             renderLevelSelectScreen(renderer, levelFiles, selectedIndex, levelRects, backgroundTexture);
         } else if (gameState == PLAYING) {
