@@ -57,8 +57,8 @@ enum GameState {
 
 int totalCoins = 0;
 int collectedCoins = 0;
-Uint32 levelStartTime = 0;
-const Uint32 levelTimeLimit = 100000;
+Sint32 levelStartTime = 0;
+constexpr Sint32 levelTimeLimit = 10000;
 
 TTF_Font* font = nullptr;
 SDL_Window* window = nullptr;
@@ -78,17 +78,17 @@ void loadLevel(const string& filePath, vector<GameObject>& gameObjects, const ve
             char tile = line[x];
             SDL_FRect rect = { static_cast<float>(x * TILE_SIZE), y * TILE_SIZE, TILE_SIZE, TILE_SIZE };
             if (tile == '1') {
-                gameObjects.push_back({ textures[0], rect });
-            } else if (tile == '/') {
                 gameObjects.push_back({ textures[1], rect });
-            } else if (tile == '+') {
+            } else if (tile == '/') {
                 gameObjects.push_back({ textures[2], rect });
+            } else if (tile == '+') {
+                gameObjects.push_back({ textures[3], rect });
                 ++totalCoins;
             } else if (tile == '@') {
                 if (++playerInit > 1) {
                     throw runtime_error("Error: Player character initialized more than once!");
                 }
-                player = { textures[3], rect };
+                player = { textures[7], rect };
             } else if (tile == '$') {
                 enemyPositions.push_back(x);
             }
@@ -102,9 +102,9 @@ void loadLevel(const string& filePath, vector<GameObject>& gameObjects, const ve
                 float enemySize = TILE_SIZE * 0.75; // 25% smaller than TILE_SIZE
                 float yOffset = TILE_SIZE - enemySize; // Calculate the offset to align to the bottom
                 SDL_FRect enemyRect = { startX, y * TILE_SIZE + yOffset, enemySize, enemySize };
-                GameObject enemy = { textures[6], enemyRect };
+                GameObject enemy = { textures[4], enemyRect };
                 SDL_FRect path = { startX, y * TILE_SIZE, endX - startX, TILE_SIZE };
-                enemies.push_back({ enemy, path, 0.06f, true, textures[6], textures[7], true });
+                enemies.push_back({ enemy, path, 0.06f, true, textures[4], textures[5], true });
             }
         }
         ++y;
@@ -153,6 +153,11 @@ bool isPointInRectF(int x, int y, const SDL_FRect& rect) {
 void drawRectOutline(SDL_Renderer* renderer, const SDL_Rect& rect, SDL_Color color) {
     SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
     SDL_RenderDrawRect(renderer, &rect);
+}
+
+void drawRectOutlineF(SDL_Renderer* renderer, const SDL_FRect& rect, SDL_Color color) {
+    SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+    SDL_RenderDrawRectF(renderer, &rect);
 }
 
 float calcOffset(float n) {
@@ -376,7 +381,7 @@ void updateEnemies(vector<Enemy>& enemies, const GameObject& player, Mix_Chunk* 
         SDL_FRect enemyTop = enemy.gameObject.rect;
         enemyTop.h = 1;
 
-        if (hasIntersection(playerBottom, enemy.gameObject.rect)) {
+        if (hasIntersection(playerBottom, enemyTop)) {
             Mix_PlayChannel(-1, killSound, 0); // Play the kill sound
             erase_if(enemies, [&enemy](const Enemy& o) {
                 return &o == &enemy;
@@ -385,6 +390,8 @@ void updateEnemies(vector<Enemy>& enemies, const GameObject& player, Mix_Chunk* 
         }
     }
 }
+
+SDL_FRect nextLevelButton = { SCREEN_WIDTH / 2 - calcOffset(10) - 5, SCREEN_HEIGHT / 2 + 32, 150, 32 };
 
 void renderWinningScreen(SDL_Renderer* renderer, bool isLastLevel) {
     SDL_Color outlineColor = { 255, 255, 255, 255 }; // White color for the outline
@@ -397,27 +404,33 @@ void renderWinningScreen(SDL_Renderer* renderer, bool isLastLevel) {
     SDL_GetMouseState(&mouseX, &mouseY);
 
     if (isLastLevel) {
-        renderText(renderer, "You have completed the game!", SCREEN_WIDTH / 2 - 210, SCREEN_HEIGHT / 2 - 50);
-        renderText(renderer, "Press Space to exit", SCREEN_WIDTH / 2 - 142.5, SCREEN_HEIGHT / 2 + 20);
+        renderText(renderer, "You have completed the game!", SCREEN_WIDTH / 2 - calcOffset(28), SCREEN_HEIGHT / 2 - 32);
+        renderText(renderer, "Press Space to exit", SCREEN_WIDTH / 2 - calcOffset(19), SCREEN_HEIGHT / 2 + 32);
     } else {
-        renderText(renderer, "You won!", SCREEN_WIDTH / 2 - 55, SCREEN_HEIGHT / 2 - 100);
-        renderText(renderer, "Next Level", SCREEN_WIDTH / 2 - 70, SCREEN_HEIGHT / 2 + 40 - 100);
-        SDL_Rect nextLevelButton = { SCREEN_WIDTH / 2 - 75, SCREEN_HEIGHT / 2 + 40 - 100, 150, 32 };
-        if (isPointInRect(mouseX, mouseY, nextLevelButton)) {
-            drawRectOutline(renderer, nextLevelButton, hoverColor);
+        renderText(renderer, "You won!", SCREEN_WIDTH / 2 - calcOffset(8), SCREEN_HEIGHT / 2 - 32);
+        renderText(renderer, "Next Level", SCREEN_WIDTH / 2 - calcOffset(10), SCREEN_HEIGHT / 2 + 32);
+        if (isPointInRectF(mouseX, mouseY, nextLevelButton)) {
+            drawRectOutlineF(renderer, nextLevelButton, hoverColor);
         } else {
-            drawRectOutline(renderer, nextLevelButton, outlineColor);
+            drawRectOutlineF(renderer, nextLevelButton, outlineColor);
         }
     }
 
     SDL_RenderPresent(renderer);
 }
 
-void renderLostScreen(SDL_Renderer* renderer) {
+Button retryButton = { "Retry level", SCREEN_WIDTH / 2 - calcOffset(11), SCREEN_HEIGHT / 2 };
+
+void renderLostScreen(SDL_Renderer* renderer, const string& reason) {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
-    renderText(renderer, "You Lost!", SCREEN_WIDTH / 2 - 67.5, SCREEN_HEIGHT / 2 - 50);
-    renderText(renderer, "Press Space to exit", SCREEN_WIDTH / 2 - 142.5, SCREEN_HEIGHT / 2);
+    if (reason == "time") {
+        renderText(renderer, "Time's up!", SCREEN_WIDTH / 2 - calcOffset(10), SCREEN_HEIGHT / 2 - 64);
+    } else if (reason == "enemy") {
+        renderText(renderer, "You Lost!", SCREEN_WIDTH / 2 - calcOffset(9), SCREEN_HEIGHT / 2 - 64);
+    }
+    renderText(renderer, "Press Space to exit", SCREEN_WIDTH / 2 - calcOffset(19), SCREEN_HEIGHT / 2 + 64);
+    renderButton(renderer, retryButton, { 255, 255, 255, 128 });
     SDL_RenderPresent(renderer);
 }
 //NOLINTEND(bugprone-integer-division)
@@ -439,12 +452,14 @@ int main() {
     SDL_Texture* starCoinTexture = IMG_LoadTexture(renderer, "../resources/star-coin.png");
     SDL_Texture* playerTextureLeft = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/left.png").c_str());
     SDL_Texture* playerTextureRight = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/right.png").c_str());
+    SDL_Texture* playerTextureWalkingLeft = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/walkingleft.png").c_str());
+    SDL_Texture* playerTextureWalkingRight = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/walkingright.png").c_str());
     SDL_Texture* backgroundTexture = IMG_LoadTexture(renderer, "../resources/background.png");
     SDL_Texture* enemyTextureLeft = IMG_LoadTexture(renderer, "../resources/enemy/left.png");
     SDL_Texture* enemyTextureRight = IMG_LoadTexture(renderer, "../resources/enemy/right.png");
-    SDL_Texture* playerLostTexture = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/lost.png").c_str());
+    SDL_Texture* playerTextureLost = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/lost.png").c_str());
 
-    vector textures = { brickTexture, vineTexture, starCoinTexture, playerTextureLeft, playerTextureRight, backgroundTexture, enemyTextureLeft, enemyTextureRight };
+    vector textures = { backgroundTexture, brickTexture, vineTexture, starCoinTexture, enemyTextureLeft, enemyTextureRight, playerTextureLeft, playerTextureRight, playerTextureLost };
 
     if (!brickTexture || !vineTexture || !playerTextureLeft || !playerTextureRight || !backgroundTexture) {
         cerr << "Failed to load textures!" << endl;
@@ -454,11 +469,11 @@ int main() {
 
     // load me music
     Mix_Music* soundtrack = Mix_LoadMUS("../resources/sounds/soundtrack.mp3");
-    Mix_Music* lostSound = Mix_LoadMUS("../resources/sounds/lost.mp3");
+    Mix_Chunk* lostSound = Mix_LoadWAV("../resources/sounds/lost.wav");
     Mix_Chunk* coinSound = Mix_LoadWAV("../resources/sounds/coin.mp3");
     Mix_Chunk* clearSound = Mix_LoadWAV("../resources/sounds/clear.mp3");
     Mix_Chunk* wonSound = Mix_LoadWAV("../resources/sounds/won.mp3");
-    Mix_Chunk* jumpSound = Mix_LoadWAV("../resources/sounds/jump.mp3");
+    Mix_Chunk* jumpSound = Mix_LoadWAV("../resources/sounds/jump.wav");
     Mix_Chunk* killSound = Mix_LoadWAV("../resources/sounds/kill.mp3");
     Mix_Chunk* stepSound = Mix_LoadWAV("../resources/sounds/steps.mp3");
 
@@ -476,11 +491,12 @@ int main() {
     GameObject player{};
     bool isOnGround = true;
     bool canDoubleJump = false;
-    float gravity = 0.3;
+    float gravity = 0.8;
+    Sint32 levelStartTime = 0;
     Uint32 lastJumpTime = 0;
     Uint32 lastStepTime = 0;
     Uint32 dyingStartTime = 0;
-    Uint32 levelStartTime = 0;
+    string deathReason;
 
     // vector for all the level files, init selected index, game state, level rects, current level index and is last level
     vector<string> levelFiles = getLevelFiles("../levels");
@@ -494,7 +510,7 @@ int main() {
     SDL_Event e;
     
     while (!quit) {
-        Uint32 currentTime = SDL_GetTicks();
+        Sint32 currentTime = SDL_GetTicks();
         while (SDL_PollEvent(&e) != 0) {
             if (e.type == SDL_QUIT) {
                 quit = true;
@@ -535,7 +551,9 @@ int main() {
                         default: ;
                     }
                 } else if ((gameState == WON || gameState == LOST) && e.key.keysym.sym == SDLK_SPACE) {
-                    quit = true;
+                    // ReSharper disable once CppExpressionWithoutSideEffects
+                    // ReSharper disable once CppDFAConstantConditions
+                    gameState == START_SCREEN;
                 } else if (gameState == DYING) {
                     if (e.key.keysym.sym == SDLK_SPACE) {
                         gameState = LOST;
@@ -568,7 +586,7 @@ int main() {
                         break;
                     case SDLK_a:
                         newRect.x -= moveSpeed;
-                        player.texture = playerTextureLeft;
+                        player.texture = playerTextureWalkingLeft;
                         if (currentTime - lastStepTime > stepCooldown) {
                             Mix_PlayChannel(-1, stepSound, 0);
                             lastStepTime = currentTime;
@@ -576,7 +594,7 @@ int main() {
                         break;
                     case SDLK_d:
                         newRect.x += moveSpeed;
-                        player.texture = playerTextureRight;
+                        player.texture = playerTextureWalkingRight;
                         if (currentTime - lastStepTime > stepCooldown) {
                             Mix_PlayChannel(-1, stepSound, 0);
                             lastStepTime = currentTime;
@@ -603,11 +621,11 @@ int main() {
                         if (musicPlaying) {
                             Mix_HaltMusic();
                             Mix_VolumeMusic(64);
-                            Mix_PlayMusic(lostSound, 1);
+                            Mix_PlayChannel(-1, lostSound, 0);
                             musicPlaying = false;
                         }
                         dyingStartTime = currentTime;
-                        player.texture = playerLostTexture;
+                        player.texture = textures[8];
                         gameState = DYING;
                         break;
                     case SDLK_ESCAPE:
@@ -662,8 +680,10 @@ int main() {
                     }
                 } else if (gameState == WON) {
                     Mix_PauseMusic();
-                    SDL_Rect nextLevelButton = { SCREEN_WIDTH / 2 - 60, SCREEN_HEIGHT / 2 + 40 - 100, 120, 40 };
-                    if (isPointInRect(mouseX, mouseY, nextLevelButton)) {
+                    if (isPointInRectF(mouseX, mouseY, nextLevelButton)) {
+                        if (soundPlayed) {
+                            Mix_HaltGroup(-1);
+                        }
                         ++currentLevelIndex;
                         if (currentLevelIndex >= levelFiles.size()) {
                             isLastLevel = true;
@@ -697,54 +717,78 @@ int main() {
                         cout << "changed character to " << playerCharStr << endl;
                         playerTextureLeft = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/left.png").c_str());
                         playerTextureRight = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/right.png").c_str());
-                        playerLostTexture = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/lost.png").c_str());
-                        textures[3] = playerTextureLeft;
-                        textures[4] = playerTextureRight;
-                        textures[8] = playerTextureLeft;
+                        playerTextureLost = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/lost.png").c_str());
+                        textures[6] = playerTextureLeft;
+                        textures[7] = playerTextureRight;
+                        textures[8] = playerTextureLost;
                         player.texture = playerTextureLeft;
                     } else if (isButtonClicked(buttonRect(changeBackgroundButton), mouseX, mouseY)) {
                         cout << "changed background" << endl;
                     } else if (isButtonClicked(buttonRect(aboutButton), mouseX, mouseY)) {
                         gameState = ABOUT;
                     }
+                } else if (gameState == LOST) {
+                    if (isPointInRectF(mouseX, mouseY, buttonRect(retryButton))) {
+                        totalCoins = 0;
+                        collectedCoins = 0;
+                        gameObjects.clear();
+                        enemies.clear();
+                        loadLevel(levelFiles[selectedIndex], gameObjects, textures, enemies, player);
+                        gameState = PLAYING;
+                        Mix_ResumeMusic(); // Resume the soundtrack
+                        musicPlaying = true;
+                        soundPlayed = false;
+                    }
                 }
             }
         }
         if (gameState == START_SCREEN) {
-            renderStartScreen(renderer, backgroundTexture);
+            renderStartScreen(renderer, textures[0]);
         } else if (gameState == SETTINGS) {
-            renderSettingsScreen(renderer, backgroundTexture);
+            renderSettingsScreen(renderer, textures[0]);
         } else if (gameState == ABOUT) {
-            renderAboutScreen(renderer, backgroundTexture);
+            renderAboutScreen(renderer, textures[0]);
         } else if (gameState == LEVEL_SELECT) {
             levelStartTime = 0;
-            renderLevelSelectScreen(renderer, levelFiles, selectedIndex, levelRects, backgroundTexture);
+            renderLevelSelectScreen(renderer, levelFiles, selectedIndex, levelRects, textures[0]);
         } else if (gameState == PLAYING) {
             if (levelStartTime == 0) {
                 levelStartTime = SDL_GetTicks();
             }
 
-            Uint32 elapsedTime = currentTime - levelStartTime;
-            //cout << "Elapsed time: " << elapsedTime << endl;
-            Uint32 remainingTime = (levelTimeLimit > elapsedTime) ? (levelTimeLimit - elapsedTime) / 1000 : 0;
+            Sint32 remainingTime = (levelTimeLimit > (currentTime - levelStartTime)) ? (levelTimeLimit - (currentTime - levelStartTime)) / 1000 : 0;
+
+            if (levelStartTime > 0 && (currentTime - levelStartTime) > levelTimeLimit) {
+                cout << "cur - lst: " << currentTime - levelStartTime << " " << endl << "ltl: " << levelTimeLimit << " " << endl;
+                if (musicPlaying) {
+                    Mix_PauseMusic();
+                    Mix_VolumeMusic(64);
+                    Mix_PlayChannel(-1, lostSound, 0);
+                    musicPlaying = false;
+                }
+                dyingStartTime = currentTime;
+                player.texture = textures[8];
+                deathReason = "time";
+                gameState = DYING;
+            }
 
             for (const auto& enemy : enemies) {
                 if (hasIntersection(player.rect, enemy.gameObject.rect)) {
                     if (musicPlaying) {
-                        Mix_HaltMusic();
+                        Mix_PauseMusic();
                         Mix_VolumeMusic(64);
-                        Mix_PlayMusic(lostSound, 1);
+                        Mix_PlayChannel(-1, lostSound, 0);
                         musicPlaying = false;
-                    } dyingStartTime = currentTime;
-                    player.texture = playerLostTexture;
+                    }
+                    dyingStartTime = currentTime;
+                    player.texture = textures[8];
+                    deathReason = "enemy";
                     gameState = DYING;
                 }
             }
             if (isOnPlatform(player, gameObjects, brickTexture)) { // bs fix for jumping
                 isOnGround = true;
                 gravity = 0.15;
-            } else {
-                isOnGround = false;
             }
             if (!isOnPlatform(player, gameObjects, brickTexture) && !isOnVine(player, gameObjects, vineTexture)) { // apply gravity
                 bool atTopOfVine = false;
@@ -759,8 +803,8 @@ int main() {
                 }
 
                 if (!atTopOfVine) {
-                    if (currentTime - lastJumpTime > 250) {
-                        gravity = 0.5;
+                    if (currentTime - lastJumpTime > 500) {
+                        gravity = 0.8;
                     }
                     player.rect.y += gravity;
                     if (player.rect.y + player.rect.h > SCREEN_HEIGHT) { // imagine falling off the screen :')
@@ -773,7 +817,7 @@ int main() {
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
             SDL_RenderClear(renderer);
 
-            SDL_RenderCopyF(renderer, backgroundTexture, nullptr, nullptr);
+            SDL_RenderCopyF(renderer, textures[0], nullptr, nullptr);
             for (const auto& obj : gameObjects) {
                 SDL_RenderCopyF(renderer, obj.texture, nullptr, &obj.rect);
             }
@@ -799,9 +843,6 @@ int main() {
 
             SDL_RenderPresent(renderer);
 
-            if (elapsedTime > levelTimeLimit) {
-                gameState = LOST;
-            }
             if (collectedCoins == totalCoins) {
                 gameState = WON;
             }
@@ -825,7 +866,7 @@ int main() {
                 SDL_RenderClear(renderer);
 
                 // Render the player and other game objects here
-                SDL_RenderCopyF(renderer, backgroundTexture, nullptr, nullptr);
+                SDL_RenderCopyF(renderer, textures[0], nullptr, nullptr);
                 for (const auto& obj : gameObjects) {
                     SDL_RenderCopyF(renderer, obj.texture, nullptr, &obj.rect);
                 }
@@ -841,7 +882,7 @@ int main() {
             }
         } else if (gameState == LOST) {
             levelStartTime = 0;
-            renderLostScreen(renderer);
+            renderLostScreen(renderer, deathReason);
         } else {
             levelStartTime = 0;
             if (currentLevelIndex >= levelFiles.size() -1 ) {
@@ -862,9 +903,8 @@ int main() {
     }
 
     // free up resources
-
     Mix_FreeMusic(soundtrack);
-    Mix_FreeMusic(lostSound);
+    Mix_FreeChunk(lostSound);
     Mix_FreeChunk(coinSound);
     Mix_FreeChunk(clearSound);
     Mix_FreeChunk(wonSound);
