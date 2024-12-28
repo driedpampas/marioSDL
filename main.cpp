@@ -44,6 +44,12 @@ enum Character {
     luigi
 };
 
+enum GameMode
+{
+    standard,
+    custom
+};
+
 enum GameState {
     START_SCREEN,
     SETTINGS,
@@ -335,7 +341,7 @@ vector<string> getLevelFiles(const string& folderPath) {
     return levelFiles;
 }
 
-void renderLevelSelectScreen(SDL_Renderer* renderer, const vector<string>& levelFiles, int selectedIndex, vector<SDL_Rect>& levelRects, SDL_Texture* backgroundTexture) {
+void renderLevelSelectScreen(SDL_Renderer* renderer, const vector<string>& levelFiles, vector<SDL_Rect>& levelRects, SDL_Texture* backgroundTexture) {
     SDL_RenderCopyF(renderer, backgroundTexture, nullptr, nullptr);
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 64);
@@ -351,7 +357,6 @@ void renderLevelSelectScreen(SDL_Renderer* renderer, const vector<string>& level
     SDL_GetMouseState(&mouseX, &mouseY);
 
     for (int i = 0; i < levelFiles.size(); ++i) {
-        //int reverseIndex = levelFiles.size() - 1 - i;
         string levelName = levelFiles[i].substr(levelFiles[i].find_last_of("/\\") + 1);
 
         int x = SCREEN_WIDTH / 2 - calcOffset(levelName.length());
@@ -543,7 +548,6 @@ int main() {
     SDL_Event e;
     
     while (!quit) {
-        int selectedIndex = 0;
         Sint32 currentTime = SDL_GetTicks();
         while (SDL_PollEvent(&e) != 0) {
             if (e.type == SDL_QUIT) {
@@ -657,7 +661,7 @@ int main() {
                         gameState = DYING;
                         break;
                     case SDLK_ESCAPE:
-                        quit = true;
+                        gameState = START_SCREEN;
                         break;
                     default: break;
                     }
@@ -759,7 +763,7 @@ int main() {
                         collectedCoins = 0;
                         gameObjects.clear();
                         enemies.clear();
-                        loadLevel(levelFiles[selectedIndex], gameObjects, textures, playerTextures, enemies, player, door);
+                        loadLevel(levelFiles[currentLevelIndex], gameObjects, textures, playerTextures, enemies, player, door);
                         gameState = PLAYING;
                         Mix_ResumeMusic(); // Resume the soundtrack
                         musicPlaying = true;
@@ -776,7 +780,7 @@ int main() {
             renderAboutScreen(renderer, textures[0]);
         } else if (gameState == LEVEL_SELECT) {
             levelStartTime = 0;
-            renderLevelSelectScreen(renderer, levelFiles, selectedIndex, levelRects, textures[0]);
+            renderLevelSelectScreen(renderer, levelFiles, levelRects, textures[0]);
         } else if (gameState == PLAYING) {
             constexpr Sint32 levelTimeLimit = 100000;
             if (levelStartTime == 0) {
