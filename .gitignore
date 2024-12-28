@@ -1,3 +1,6 @@
 cmake-build*
 .vs
 build
+/resources/player/SMW
+/resources/player/SMB3
+/resources/player/background.png
