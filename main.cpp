@@ -273,11 +273,13 @@ void renderStartScreen(SDL_Renderer* renderer, SDL_Texture* backgroundTexture) {
     SDL_RenderPresent(renderer);
 }
 
-Button changeCharacterButton = { "Change Character", SCREEN_WIDTH / 2 - calcOffset(16), SCREEN_HEIGHT / 2 - 90 };
-Button changeBackgroundButton = { "Change Background", SCREEN_WIDTH / 2 - calcOffset(17), SCREEN_HEIGHT / 2 - 40 };
-Button aboutButton = { "About", SCREEN_WIDTH / 2 - calcOffset(5), SCREEN_HEIGHT / 2 + 10 };
+SDL_FRect marioRect = { SCREEN_WIDTH / 2 - 100, SCREEN_HEIGHT / 2 - 100, 50, 50 };
+SDL_FRect luigiRect = { SCREEN_WIDTH / 2 + 50, SCREEN_HEIGHT / 2 - 100, 50, 50 };
 
-vector SettingsButtons = { changeCharacterButton, changeBackgroundButton, aboutButton };
+Button changeBackgroundButton = { "Change Background", SCREEN_WIDTH / 2 - calcOffset(17), SCREEN_HEIGHT / 2 - 16 };
+Button aboutButton = { "About", SCREEN_WIDTH / 2 - calcOffset(5), SCREEN_HEIGHT / 2 + 32 };
+
+vector SettingsButtons = { changeBackgroundButton, aboutButton };
 Character playerChar = mario;
 
 void renderSettingsScreen(SDL_Renderer* renderer, SDL_Texture* backgroundTexture) {
@@ -290,6 +292,8 @@ void renderSettingsScreen(SDL_Renderer* renderer, SDL_Texture* backgroundTexture
     SDL_Color buttonColor = { 255, 255, 255, 128 };
     SDL_Color buttonHoverColor = { 0, 255, 0, 128 };
 
+    renderText(renderer, "Change Character", SCREEN_WIDTH / 2 - calcOffset(16), SCREEN_HEIGHT / 2 - 150);
+
     for (const auto& button : SettingsButtons) {
         if (isPointInRectF(mouseX, mouseY, buttonRect(button)))
             renderButton(renderer, button, buttonHoverColor);
@@ -299,9 +303,6 @@ void renderSettingsScreen(SDL_Renderer* renderer, SDL_Texture* backgroundTexture
     // Draw the two characters
     SDL_Texture* marioTexture = IMG_LoadTexture(renderer, "../resources/player/mario/left.png");
     SDL_Texture* luigiTexture = IMG_LoadTexture(renderer, "../resources/player/luigi/left.png");
-
-    SDL_FRect marioRect = { SCREEN_WIDTH / 2 - 100, SCREEN_HEIGHT / 2 - 180, 50, 50 };
-    SDL_FRect luigiRect = { SCREEN_WIDTH / 2 + 50, SCREEN_HEIGHT / 2 - 180, 50, 50 };
 
     SDL_RenderCopyF(renderer, marioTexture, nullptr, &marioRect);
     SDL_RenderCopyF(renderer, luigiTexture, nullptr, &luigiRect);
@@ -771,12 +772,10 @@ int main() {
                         gameState = LEVEL_SELECT;
                     }
                 } else if (gameState == SETTINGS) {
-                    if (isButtonClicked(buttonRect(changeCharacterButton), mouseX, mouseY)) {
-                        playerChar = playerChar == mario ? luigi : mario;
-                        // ReSharper disable once CppDFAConstantConditions
-                        // ReSharper disable once CppDFAUnreachableCode
-                        playerCharStr = playerChar == mario ? "mario" : "luigi";
-                        cout << "changed character to " << playerCharStr << endl;
+                    if (isPointInRectF(mouseX, mouseY, marioRect)) {
+                        playerChar = mario;
+                        playerCharStr = "mario";
+                        cout << "changed character to mario" << endl;
                         playerTextureLeft = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/left.png").c_str());
                         playerTextureRight = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/right.png").c_str());
                         playerTextureLost = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/lost.png").c_str());
@@ -784,7 +783,19 @@ int main() {
                         playerTextures[1] = playerTextureRight;
                         playerTextures[4] = playerTextureLost;
                         player.texture = playerTextureLeft;
-                    } else if (isButtonClicked(buttonRect(changeBackgroundButton), mouseX, mouseY)) {
+                    } else if (isPointInRectF(mouseX, mouseY, luigiRect)) {
+                        playerChar = luigi;
+                        playerCharStr = "luigi";
+                        cout << "changed character to luigi" << endl;
+                        playerTextureLeft = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/left.png").c_str());
+                        playerTextureRight = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/right.png").c_str());
+                        playerTextureLost = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/lost.png").c_str());
+                        playerTextures[0] = playerTextureLeft;
+                        playerTextures[1] = playerTextureRight;
+                        playerTextures[4] = playerTextureLost;
+                        player.texture = playerTextureLeft;
+                    }
+                    if (isButtonClicked(buttonRect(changeBackgroundButton), mouseX, mouseY)) {
                         cout << "changed background" << endl;
                     } else if (isButtonClicked(buttonRect(aboutButton), mouseX, mouseY)) {
                         gameState = ABOUT;
