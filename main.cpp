@@ -365,10 +365,15 @@ vector<string> getLevelFiles(const string& folderPath) {
     return levelFiles;
 }
 
+SDL_Rect leftArrowRect = { SCREEN_WIDTH / 2 - 150, 250, 50, 50 };
+SDL_Rect rightArrowRect = { SCREEN_WIDTH / 2 + 100, 250, 50, 50 };
+
+static int levelScrollOffset = 0;
+
 void renderLevelSelectScreen(SDL_Renderer* renderer, const vector<string>& levelFiles, vector<SDL_Rect>& levelRects, SDL_Texture* backgroundTexture) {
     SDL_RenderCopyF(renderer, backgroundTexture, nullptr, nullptr);
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 64);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 96);
     SDL_RenderFillRect(renderer, nullptr);
 
     renderText(renderer, "Select a Level", SCREEN_WIDTH / 2 - 100, 150);
@@ -380,20 +385,49 @@ void renderLevelSelectScreen(SDL_Renderer* renderer, const vector<string>& level
     int mouseX, mouseY;
     SDL_GetMouseState(&mouseX, &mouseY);
 
-    for (int i = 0; i < levelFiles.size(); ++i) {
-        string levelName = levelFiles[i].substr(levelFiles[i].find_last_of("/\\") + 1);
+    // If there are more than 5 levels, draw arrows and only show a subset
+    if (levelFiles.size() > 5) {
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 51);
+        SDL_RenderFillRect(renderer, &leftArrowRect);
+        SDL_RenderFillRect(renderer, &rightArrowRect);
 
-        int x = SCREEN_WIDTH / 2 - calcOffset(levelName.length());
-        int y = 200 + i * 30;
-        renderText(renderer, levelName, x, y + ( i * 5));
+        renderText(renderer, "<", leftArrowRect.x + 17, leftArrowRect.y + 10);
+        renderText(renderer, ">", rightArrowRect.x + 17, rightArrowRect.y + 10);
 
-        SDL_Rect rect = { x - 5 , y + ( i * 5), static_cast<int>(levelName.length() * 15), 30 };
-        levelRects.push_back(rect);
+        // Only display levels from levelScrollOffset to levelScrollOffset + 5
+        for (int i = levelScrollOffset; i < min(levelScrollOffset + 5, (int)levelFiles.size()); ++i) {
+            string levelName = levelFiles[i].substr(levelFiles[i].find_last_of("/\\") + 1);
 
-        if (isPointInRect(mouseX, mouseY, rect)) {
-            drawRectOutline(renderer, rect, hoverColor);
-        } else {
-            drawRectOutline(renderer, rect, outlineColor);
+            int x = SCREEN_WIDTH / 2 - calcOffset(levelName.length());
+            int y = 200 + (i - levelScrollOffset) * 30;
+            renderText(renderer, levelName, x, y + ((i - levelScrollOffset) * 5));
+
+            SDL_Rect rect = { x - 5 , y + ((i - levelScrollOffset) * 5), static_cast<int>(levelName.length() * 15), 30 };
+            levelRects.push_back(rect);
+
+            if (isPointInRect(mouseX, mouseY, rect)) {
+                drawRectOutline(renderer, rect, hoverColor);
+            } else {
+                drawRectOutline(renderer, rect, outlineColor);
+            }
+        }
+    } else {
+        // Display all levels because there are 5 or fewer
+        for (int i = 0; i < levelFiles.size(); ++i) {
+            string levelName = levelFiles[i].substr(levelFiles[i].find_last_of("/\\") + 1);
+
+            int x = SCREEN_WIDTH / 2 - calcOffset(levelName.length());
+            int y = 200 + i * 30;
+            renderText(renderer, levelName, x, y + ( i * 5));
+
+            SDL_Rect rect = { x - 5 , y + ( i * 5), static_cast<int>(levelName.length() * 15), 30 };
+            levelRects.push_back(rect);
+
+            if (isPointInRect(mouseX, mouseY, rect)) {
+                drawRectOutline(renderer, rect, hoverColor);
+            } else {
+                drawRectOutline(renderer, rect, outlineColor);
+            }
         }
     }
 
@@ -766,6 +800,11 @@ int main() {
                             levelStartTime = 0;
                             break;
                         }
+                    }
+                    if (isPointInRect(mouseX, mouseY, leftArrowRect)) {
+                        levelScrollOffset = max(0, levelScrollOffset - 1);
+                    } else if (isPointInRect(mouseX, mouseY, rightArrowRect)) {
+                        levelScrollOffset = min((int)levelFiles.size() - 5, levelScrollOffset + 1);
                     }
                 } else if (gameState == WON) {
                     Mix_PauseMusic();
