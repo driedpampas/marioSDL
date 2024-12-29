@@ -67,6 +67,7 @@ SDL_Renderer* renderer = nullptr;
 
 //NOLINTBEGIN(cppcoreguidelines-narrowing-conversions)
 void loadLevel(const string& filePath, vector<GameObject>& gameObjects, const vector<SDL_Texture*>& textures, const vector<SDL_Texture*>& playerTextures, vector<Enemy>& enemies, GameObject& player, GameObject& door) {
+    cout << filePath << endl;
     ifstream levelFile(filePath);
     string line;
     float y = 0;
@@ -348,6 +349,7 @@ vector<string> getLevelFiles(const string& folderPath) {
     for (const auto& entry : directory_iterator(folderPath)) {
         if (entry.path().extension() == ".lvl") {
             levelFiles.push_back(entry.path().string());
+            cout << "Found level: " << entry.path().string() << endl;
         }
     }
 
@@ -359,7 +361,7 @@ vector<string> getLevelFiles(const string& folderPath) {
             }
         }
     }
-
+    cout << "Found " << levelFiles.size() << " levels" << endl;
     return levelFiles;
 }
 
@@ -481,6 +483,40 @@ void renderLostScreen(SDL_Renderer* renderer, const string& reason) {
 }
 //NOLINTEND(bugprone-integer-division)
 
+vector<SDL_Texture*> loadBackgroundTextures(SDL_Renderer* renderer, const string& folderPath) {
+    vector<SDL_Texture*> backgroundTextures;
+    for (const auto& entry : directory_iterator(folderPath)) {
+        if (entry.path().extension() == ".png") {
+            // ReSharper disable once CppTooWideScope
+            SDL_Texture* texture = IMG_LoadTexture(renderer, entry.path().string().c_str());
+            if (texture) {
+                backgroundTextures.push_back(texture);
+            } else {
+                cerr << "Failed to load texture: " << entry.path() << " " << SDL_GetError() << endl;
+            }
+        }
+    }
+    return backgroundTextures;
+}
+
+void changeBackground(const vector<SDL_Texture*>& backgrounds,vector<SDL_Texture*>& textures, const int& currentIndex) {
+    textures[0] = backgrounds[(currentIndex + 1) % backgrounds.size()];
+}
+
+void switchCharacter(Character character, SDL_Renderer* renderer, vector<SDL_Texture*>& playerTextures, GameObject& player) {
+    string playerCharStr = (character == mario) ? "mario" : "luigi";
+    cout << "changed character to " << playerCharStr << endl;
+
+    SDL_Texture* playerTextureLeft = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/left.png").c_str());
+    SDL_Texture* playerTextureRight = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/right.png").c_str());
+    SDL_Texture* playerTextureLost = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/lost.png").c_str());
+
+    playerTextures[0] = playerTextureLeft;
+    playerTextures[1] = playerTextureRight;
+    playerTextures[4] = playerTextureLost;
+    player.texture = playerTextureLeft;
+}
+
 int main() {
     // init stuff
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
@@ -490,10 +526,11 @@ int main() {
     Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048);
     TTF_Init();
     font = TTF_OpenFont("../resources/font/firacode.ttf", 24);
-    
+
     string playerCharStr = (playerChar == mario) ? "mario" : "luigi";
 
-    SDL_Texture* backgroundTexture = IMG_LoadTexture(renderer, "../resources/background.png");
+    vector<SDL_Texture*> backgroundTextures = loadBackgroundTextures(renderer, "../resources/backgrounds");
+    int currentBackgroundIndex = 0;
     SDL_Texture* brickTexture = IMG_LoadTexture(renderer, "../resources/brick.png");
     SDL_Texture* vineTexture = IMG_LoadTexture(renderer, "../resources/vine.png");
     SDL_Texture* starCoinTexture = IMG_LoadTexture(renderer, "../resources/star-coin.png");
@@ -501,7 +538,7 @@ int main() {
     SDL_Texture* enemyTextureRight = IMG_LoadTexture(renderer, "../resources/enemy/right.png");
     SDL_Texture* doorTextureClosed = IMG_LoadTexture(renderer, "../resources/door/closed.png");
     SDL_Texture* doorTextureOpen = IMG_LoadTexture(renderer, "../resources/door/open.png");
-    vector textures = { backgroundTexture, brickTexture, vineTexture, starCoinTexture, enemyTextureLeft, enemyTextureRight, doorTextureClosed, doorTextureOpen };
+    vector textures = { backgroundTextures[currentBackgroundIndex], brickTexture, vineTexture, starCoinTexture, enemyTextureLeft, enemyTextureRight, doorTextureClosed, doorTextureOpen };
 
     SDL_Texture* playerTextureLeft = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/left.png").c_str());
     SDL_Texture* playerTextureRight = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/right.png").c_str());
@@ -568,7 +605,7 @@ int main() {
 
     bool quit = false;
     SDL_Event e;
-    
+
     while (!quit) {
         Sint32 currentTime = SDL_GetTicks();
         while (SDL_PollEvent(&e) != 0) {
@@ -594,7 +631,7 @@ int main() {
                         break;
                     default: break;
                     }
-                } else if (gameState == SETTINGS) {
+                } else if (gameState == SETTINGS || gameState == MODE_SELECT) {
                     switch (e.key.keysym.sym) {
                         case SDLK_ESCAPE:
                             gameState = START_SCREEN;
@@ -602,12 +639,11 @@ int main() {
                         default: break;
                     }
                 } else if (gameState == ABOUT) {
-                    switch (e.key.keysym.sym)
-                    {
+                    switch (e.key.keysym.sym) {
                         case SDLK_ESCAPE:
                             gameState = SETTINGS;
                             break;
-                        default: ;
+                        default: break;
                     }
                 } else if ((gameState == WON || gameState == LOST) && e.key.keysym.sym == SDLK_SPACE) {
                     // ReSharper disable once CppExpressionWithoutSideEffects
@@ -719,7 +755,7 @@ int main() {
             } else if (e.type == SDL_MOUSEBUTTONDOWN) { // clicking with the mouse
                 int mouseX, mouseY;
                 SDL_GetMouseState(&mouseX, &mouseY);
-                
+
                 if (gameState == LEVEL_SELECT) {
                     for (int i = 0; i < levelRects.size(); ++i) {
                         if (isPointInRect(mouseX, mouseY, levelRects[i])) {
@@ -738,6 +774,7 @@ int main() {
                             Mix_HaltGroup(-1);
                         }
                         ++currentLevelIndex;
+                        cout << currentLevelIndex << endl;
                         if (currentLevelIndex >= levelFiles.size()) {
                             isLastLevel = true;
                             gameState = WON;
@@ -746,9 +783,10 @@ int main() {
                             collectedCoins = 0;
                             gameObjects.clear();
                             enemies.clear();
+                            changeBackground(backgroundTextures, textures, currentLevelIndex);
                             loadLevel(levelFiles[currentLevelIndex], gameObjects, textures, playerTextures, enemies, player, door);
                             gameState = PLAYING;
-                            Mix_ResumeMusic(); // Resume the soundtrack
+                            Mix_ResumeMusic();
                             musicPlaying = true;
                             soundPlayed = false;
                         }
@@ -774,28 +812,13 @@ int main() {
                 } else if (gameState == SETTINGS) {
                     if (isPointInRectF(mouseX, mouseY, marioRect)) {
                         playerChar = mario;
-                        playerCharStr = "mario";
-                        cout << "changed character to mario" << endl;
-                        playerTextureLeft = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/left.png").c_str());
-                        playerTextureRight = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/right.png").c_str());
-                        playerTextureLost = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/lost.png").c_str());
-                        playerTextures[0] = playerTextureLeft;
-                        playerTextures[1] = playerTextureRight;
-                        playerTextures[4] = playerTextureLost;
-                        player.texture = playerTextureLeft;
+                        switchCharacter(playerChar, renderer, playerTextures, player);
                     } else if (isPointInRectF(mouseX, mouseY, luigiRect)) {
                         playerChar = luigi;
-                        playerCharStr = "luigi";
-                        cout << "changed character to luigi" << endl;
-                        playerTextureLeft = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/left.png").c_str());
-                        playerTextureRight = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/right.png").c_str());
-                        playerTextureLost = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/lost.png").c_str());
-                        playerTextures[0] = playerTextureLeft;
-                        playerTextures[1] = playerTextureRight;
-                        playerTextures[4] = playerTextureLost;
-                        player.texture = playerTextureLeft;
+                        switchCharacter(playerChar, renderer, playerTextures, player);
                     }
                     if (isButtonClicked(buttonRect(changeBackgroundButton), mouseX, mouseY)) {
+                        changeBackground(backgroundTextures, textures, currentBackgroundIndex);
                         cout << "changed background" << endl;
                     } else if (isButtonClicked(buttonRect(aboutButton), mouseX, mouseY)) {
                         gameState = ABOUT;
