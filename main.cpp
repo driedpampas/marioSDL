@@ -67,7 +67,6 @@ SDL_Renderer* renderer = nullptr;
 
 //NOLINTBEGIN(cppcoreguidelines-narrowing-conversions)
 void loadLevel(const string& filePath, vector<GameObject>& gameObjects, const vector<SDL_Texture*>& textures, const vector<SDL_Texture*>& playerTextures, vector<Enemy>& enemies, GameObject& player, GameObject& door) {
-    cout << filePath << endl;
     ifstream levelFile(filePath);
     string line;
     float y = 0;
@@ -222,9 +221,6 @@ bool isButtonClicked(const SDL_FRect& rect, const int mouseX, const int mouseY) 
     return mouseX >= rect.x && mouseY >= rect.y && mouseX <= rect.x + rect.w && mouseY <= rect.y + rect.h;
 }
 
-Button playButton = {"Play", SCREEN_WIDTH / 2 - calcOffset(4), SCREEN_HEIGHT / 2 - 16};
-Button settingsButton = { "Settings", SCREEN_WIDTH / 2 - calcOffset(8), SCREEN_HEIGHT / 2 + 32 };
-
 Button normalModeButton = { "Normal Mode", SCREEN_WIDTH / 2 - calcOffset(12), SCREEN_HEIGHT / 2 - 16 };
 Button levelSelectButton = { "Level Select", SCREEN_WIDTH / 2 - calcOffset(13), SCREEN_HEIGHT / 2 + 32 };
 
@@ -250,6 +246,9 @@ void renderModeSelectScreen(SDL_Renderer* renderer, SDL_Texture* backgroundTextu
 
     SDL_RenderPresent(renderer);
 }
+
+Button playButton = {"Play", SCREEN_WIDTH / 2 - calcOffset(4), SCREEN_HEIGHT / 2 - 16};
+Button settingsButton = { "Settings", SCREEN_WIDTH / 2 - calcOffset(8), SCREEN_HEIGHT / 2 + 32 };
 
 void renderStartScreen(SDL_Renderer* renderer, SDL_Texture* backgroundTexture) {
     SDL_RenderClear(renderer);
@@ -349,7 +348,6 @@ vector<string> getLevelFiles(const string& folderPath) {
     for (const auto& entry : directory_iterator(folderPath)) {
         if (entry.path().extension() == ".lvl") {
             levelFiles.push_back(entry.path().string());
-            cout << "Found level: " << entry.path().string() << endl;
         }
     }
 
@@ -361,7 +359,6 @@ vector<string> getLevelFiles(const string& folderPath) {
             }
         }
     }
-    cout << "Found " << levelFiles.size() << " levels" << endl;
     return levelFiles;
 }
 
@@ -384,6 +381,7 @@ void renderLevelSelectScreen(SDL_Renderer* renderer, const vector<string>& level
 
     int mouseX, mouseY;
     SDL_GetMouseState(&mouseX, &mouseY);
+    Sint32 numberOfLevels = levelFiles.size();
 
     // If there are more than 5 levels, draw arrows and only show a subset
     if (levelFiles.size() > 5) {
@@ -395,7 +393,7 @@ void renderLevelSelectScreen(SDL_Renderer* renderer, const vector<string>& level
         renderText(renderer, ">", rightArrowRect.x + 17, rightArrowRect.y + 10);
 
         // Only display levels from levelScrollOffset to levelScrollOffset + 5
-        for (int i = levelScrollOffset; i < min(levelScrollOffset + 5, (int)levelFiles.size()); ++i) {
+        for (int i = levelScrollOffset; i < min(levelScrollOffset + 5, numberOfLevels); ++i) {
             string levelName = levelFiles[i].substr(levelFiles[i].find_last_of("/\\") + 1);
 
             int x = SCREEN_WIDTH / 2 - calcOffset(levelName.length());
@@ -539,7 +537,6 @@ void changeBackground(const vector<SDL_Texture*>& backgrounds,vector<SDL_Texture
 
 void switchCharacter(Character character, SDL_Renderer* renderer, vector<SDL_Texture*>& playerTextures, GameObject& player) {
     string playerCharStr = (character == mario) ? "mario" : "luigi";
-    cout << "changed character to " << playerCharStr << endl;
 
     SDL_Texture* playerTextureLeft = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/left.png").c_str());
     SDL_Texture* playerTextureRight = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/right.png").c_str());
@@ -804,7 +801,8 @@ int main() {
                     if (isPointInRect(mouseX, mouseY, leftArrowRect)) {
                         levelScrollOffset = max(0, levelScrollOffset - 1);
                     } else if (isPointInRect(mouseX, mouseY, rightArrowRect)) {
-                        levelScrollOffset = min((int)levelFiles.size() - 5, levelScrollOffset + 1);
+                        Sint32 numberOfLevels = levelFiles.size();
+                        levelScrollOffset = min(numberOfLevels - 5, levelScrollOffset + 1);
                     }
                 } else if (gameState == WON) {
                     Mix_PauseMusic();
@@ -813,7 +811,6 @@ int main() {
                             Mix_HaltGroup(-1);
                         }
                         ++currentLevelIndex;
-                        cout << currentLevelIndex << endl;
                         if (currentLevelIndex >= levelFiles.size()) {
                             isLastLevel = true;
                             gameState = WON;
@@ -858,7 +855,6 @@ int main() {
                     }
                     if (isButtonClicked(buttonRect(changeBackgroundButton), mouseX, mouseY)) {
                         changeBackground(backgroundTextures, textures, currentBackgroundIndex);
-                        cout << "changed background" << endl;
                     } else if (isButtonClicked(buttonRect(aboutButton), mouseX, mouseY)) {
                         gameState = ABOUT;
                     }
@@ -897,7 +893,6 @@ int main() {
             Sint32 remainingTime = (levelTimeLimit > (currentTime - levelStartTime)) ? (levelTimeLimit - (currentTime - levelStartTime)) / 1000 : 0;
 
             if (levelStartTime > 0 && (currentTime - levelStartTime) > levelTimeLimit) {
-                cout << "cur - lst: " << currentTime - levelStartTime << " " << endl << "ltl: " << levelTimeLimit << " " << endl;
                 if (musicPlaying) {
                     Mix_PauseMusic();
                     Mix_VolumeMusic(64);

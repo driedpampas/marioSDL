@@ -16,8 +16,9 @@ $.+$......./..../...
 
 
 # 15 lines, 20 columns
-# make comments with '#'
-# "one" is a ground block, "slash" is a vine
-# "at" is the player starting point
-# "plus" will be the coins
+# "1" is a ground block, "/" is a vine
+# "@" is the player starting point
+# "plus" are the coins
+# "D" is the door that checks and ends the level if all coins are collected
+# "$" between these will be the enemy's path
 # anything else is invalid and ignored
