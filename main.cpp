@@ -59,7 +59,8 @@ enum GameState {
     TRANSITION,
     WON,
     DYING,
-    LOST
+    LOST,
+    MODE_SELECT
 };
 
 int totalCoins = 0;
@@ -228,6 +229,32 @@ bool isButtonClicked(const SDL_FRect& rect, const int mouseX, const int mouseY) 
 
 Button playButton = {"Play", SCREEN_WIDTH / 2 - calcOffset(4), SCREEN_HEIGHT / 2 - 16};
 Button settingsButton = { "Settings", SCREEN_WIDTH / 2 - calcOffset(8), SCREEN_HEIGHT / 2 + 32 };
+
+Button normalModeButton = { "Normal Mode", SCREEN_WIDTH / 2 - calcOffset(12), SCREEN_HEIGHT / 2 - 16 };
+Button levelSelectButton = { "Level Select", SCREEN_WIDTH / 2 - calcOffset(13), SCREEN_HEIGHT / 2 + 32 };
+
+void renderModeSelectScreen(SDL_Renderer* renderer, SDL_Texture* backgroundTexture) {
+    SDL_RenderClear(renderer);
+    renderBackgroundWithFadeOut(renderer, backgroundTexture);
+
+    renderText(renderer, "Select Mode", SCREEN_WIDTH / 2 - calcOffset(11), SCREEN_HEIGHT / 2 - 64 );
+
+    int mouseX, mouseY;
+    SDL_GetMouseState(&mouseX, &mouseY);
+
+    SDL_Color buttonColor = { 255, 255, 255, 128 };
+    SDL_Color buttonHoverColor = { 0, 255, 0, 128 };
+
+    if (isPointInRectF(mouseX, mouseY, buttonRect(normalModeButton)))
+        renderButton(renderer, normalModeButton, buttonHoverColor);
+    renderButton(renderer, normalModeButton, buttonColor);
+
+    if (isPointInRectF(mouseX, mouseY, buttonRect(levelSelectButton)))
+        renderButton(renderer, levelSelectButton, buttonHoverColor);
+    renderButton(renderer, levelSelectButton, buttonColor);
+
+    SDL_RenderPresent(renderer);
+}
 
 void renderStartScreen(SDL_Renderer* renderer, SDL_Texture* backgroundTexture) {
     SDL_RenderClear(renderer);
@@ -544,6 +571,8 @@ int main() {
     int currentLevelIndex = 0;
     bool isLastLevel = false;
 
+    GameMode gameMode = standard;
+
     bool quit = false;
     SDL_Event e;
     
@@ -733,10 +762,19 @@ int main() {
                     }
                 } else if (gameState == START_SCREEN) {
                     if (isButtonClicked(buttonRect(playButton), mouseX, mouseY)){
-                        gameState = LEVEL_SELECT;
+                        gameState = MODE_SELECT;
                     }
                     if (isButtonClicked(buttonRect(settingsButton), mouseX, mouseY)) {
                         gameState = SETTINGS;
+                    }
+                } else if (gameState == MODE_SELECT) {
+                    if (isButtonClicked(buttonRect(normalModeButton), mouseX, mouseY)) {
+                        gameMode = standard;
+                        gameState = LEVEL_SELECT;
+                    }
+                    if (isButtonClicked(buttonRect(levelSelectButton), mouseX, mouseY)) {
+                        gameMode = custom;
+                        gameState = LEVEL_SELECT;
                     }
                 } else if (gameState == SETTINGS) {
                     if (isButtonClicked(buttonRect(changeCharacterButton), mouseX, mouseY)) {
@@ -774,6 +812,8 @@ int main() {
         }
         if (gameState == START_SCREEN) {
             renderStartScreen(renderer, textures[0]);
+        } else if (gameState == MODE_SELECT) {
+            renderModeSelectScreen(renderer, textures[0]);
         } else if (gameState == SETTINGS) {
             renderSettingsScreen(renderer, textures[0]);
         } else if (gameState == ABOUT) {
