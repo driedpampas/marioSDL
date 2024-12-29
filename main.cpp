@@ -44,12 +44,6 @@ enum Character {
     luigi
 };
 
-enum GameMode
-{
-    standard,
-    custom
-};
-
 enum GameState {
     START_SCREEN,
     SETTINGS,
@@ -571,8 +565,6 @@ int main() {
     int currentLevelIndex = 0;
     bool isLastLevel = false;
 
-    GameMode gameMode = standard;
-
     bool quit = false;
     SDL_Event e;
     
@@ -769,11 +761,13 @@ int main() {
                     }
                 } else if (gameState == MODE_SELECT) {
                     if (isButtonClicked(buttonRect(normalModeButton), mouseX, mouseY)) {
-                        gameMode = standard;
-                        gameState = LEVEL_SELECT;
+                        gameObjects.clear();
+                        collectedCoins = 0;
+                        loadLevel(levelFiles[0], gameObjects, textures, playerTextures, enemies, player, door);
+                        gameState = PLAYING;
+                        levelStartTime = 0;
                     }
                     if (isButtonClicked(buttonRect(levelSelectButton), mouseX, mouseY)) {
-                        gameMode = custom;
                         gameState = LEVEL_SELECT;
                     }
                 } else if (gameState == SETTINGS) {
