@@ -13,12 +13,3 @@ $.+$......./..../...
 ....../......../....
 ...D../@......./....
 11111111111111111111
-
-
-# 15 lines, 20 columns
-# "1" is a ground block, "/" is a vine
-# "@" is the player starting point
-# "plus" are the coins
-# "D" is the door that checks and ends the level if all coins are collected
-# "$" between these will be the enemy's path
-# anything else is invalid and ignored

@@ -41,8 +41,11 @@ struct Button {
 
 enum Character {
     mario,
-    luigi
+    luigi,
+    none
 };
+
+Character playerChar = mario;
 
 enum GameState {
     START_SCREEN,
@@ -57,9 +60,13 @@ enum GameState {
     MODE_SELECT
 };
 
+enum GameMode {
+    NORMAL,
+    CUSTOM
+};
+
 int totalCoins = 0;
 int collectedCoins = 0;
-
 
 TTF_Font* font = nullptr;
 SDL_Window* window = nullptr;
@@ -114,7 +121,7 @@ void loadLevel(const string& filePath, vector<GameObject>& gameObjects, const ve
                 SDL_FRect enemyRect = { startX, y * TILE_SIZE + yOffset, enemySize, enemySize };
                 GameObject enemy = { textures[4], enemyRect };
                 SDL_FRect path = { startX, y * TILE_SIZE, endX - startX, TILE_SIZE };
-                enemies.push_back({ enemy, path, 0.06f, true, textures[4], textures[5], true });
+                enemies.push_back({ enemy, path, 0.05f, true, textures[4], textures[5], true });
             }
         }
         ++y;
@@ -276,11 +283,9 @@ void renderStartScreen(SDL_Renderer* renderer, SDL_Texture* backgroundTexture) {
 SDL_FRect marioRect = { SCREEN_WIDTH / 2 - 100, SCREEN_HEIGHT / 2 - 100, 50, 50 };
 SDL_FRect luigiRect = { SCREEN_WIDTH / 2 + 50, SCREEN_HEIGHT / 2 - 100, 50, 50 };
 
-Button changeBackgroundButton = { "Change Background", SCREEN_WIDTH / 2 - calcOffset(17), SCREEN_HEIGHT / 2 - 16 };
 Button aboutButton = { "About", SCREEN_WIDTH / 2 - calcOffset(5), SCREEN_HEIGHT / 2 + 32 };
 
-vector SettingsButtons = { changeBackgroundButton, aboutButton };
-Character playerChar = mario;
+vector SettingsButtons = { aboutButton };
 
 void renderSettingsScreen(SDL_Renderer* renderer, SDL_Texture* backgroundTexture) {
     SDL_RenderClear(renderer);
@@ -294,10 +299,10 @@ void renderSettingsScreen(SDL_Renderer* renderer, SDL_Texture* backgroundTexture
 
     renderText(renderer, "Change Character", SCREEN_WIDTH / 2 - calcOffset(16), SCREEN_HEIGHT / 2 - 150);
 
-    for (const auto& button : SettingsButtons) {
-        if (isPointInRectF(mouseX, mouseY, buttonRect(button)))
-            renderButton(renderer, button, buttonHoverColor);
-        renderButton(renderer, button, buttonColor);
+    if (isPointInRectF(mouseX, mouseY, buttonRect(aboutButton))) {
+        renderButton(renderer, aboutButton, buttonHoverColor);
+    } else {
+        renderButton(renderer, aboutButton, buttonColor);
     }
 
     // Draw the two characters
@@ -506,7 +511,7 @@ void renderLostScreen(SDL_Renderer* renderer, const string& reason) {
     SDL_RenderClear(renderer);
     if (reason == "time") {
         renderText(renderer, "Time's up!", SCREEN_WIDTH / 2 - calcOffset(10), SCREEN_HEIGHT / 2 - 64);
-    } else if (reason == "enemy") {
+    } else {
         renderText(renderer, "You Lost!", SCREEN_WIDTH / 2 - calcOffset(9), SCREEN_HEIGHT / 2 - 64);
     }
     renderText(renderer, "Press Space to exit", SCREEN_WIDTH / 2 - calcOffset(19), SCREEN_HEIGHT / 2 + 64);
@@ -535,17 +540,42 @@ void changeBackground(const vector<SDL_Texture*>& backgrounds,vector<SDL_Texture
     textures[0] = backgrounds[(currentIndex + 1) % backgrounds.size()];
 }
 
-void switchCharacter(Character character, SDL_Renderer* renderer, vector<SDL_Texture*>& playerTextures, GameObject& player) {
-    string playerCharStr = (character == mario) ? "mario" : "luigi";
+vector<SDL_Texture*> playerTextures = {};
 
-    SDL_Texture* playerTextureLeft = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/left.png").c_str());
-    SDL_Texture* playerTextureRight = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/right.png").c_str());
-    SDL_Texture* playerTextureLost = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/lost.png").c_str());
+SDL_Texture* playerTextureLeft = nullptr;
+SDL_Texture* playerTextureRight = nullptr;
+SDL_Texture* playerTextureWalkingLeft = nullptr;
+SDL_Texture* playerTextureWalkingRight = nullptr;
+SDL_Texture* playerTextureLost = nullptr;
 
-    playerTextures[0] = playerTextureLeft;
-    playerTextures[1] = playerTextureRight;
-    playerTextures[4] = playerTextureLost;
-    player.texture = playerTextureLeft;
+vector<SDL_Texture*> switchCharacter(Character character, SDL_Renderer* renderer) {
+    string characterStr = (character == mario) ? "mario" : "luigi";
+
+    cout << "Switching to " << characterStr << " character" << endl;
+
+    // Clear existing textures
+    for (auto texture : playerTextures) {
+        SDL_DestroyTexture(texture);
+    }
+    playerTextures.clear();
+
+    // Load new textures
+    playerTextureLeft = IMG_LoadTexture(renderer, ("../resources/player/" + characterStr + "/left.png").c_str());
+    playerTextureRight = IMG_LoadTexture(renderer, ("../resources/player/" + characterStr + "/right.png").c_str());
+    playerTextureWalkingLeft = IMG_LoadTexture(renderer, ("../resources/player/" + characterStr + "/walkingleft.png").c_str());
+    playerTextureWalkingRight = IMG_LoadTexture(renderer, ("../resources/player/" + characterStr + "/walkingright.png").c_str());
+    playerTextureLost = IMG_LoadTexture(renderer, ("../resources/player/" + characterStr + "/lost.png").c_str());
+
+    // Check if textures are loaded successfully
+    if (!playerTextureLeft || !playerTextureRight || !playerTextureWalkingLeft || !playerTextureWalkingRight || !playerTextureLost) {
+        cerr << "Failed to load player textures!" << endl << SDL_GetError() << endl;
+        SDL_Quit();
+        return vector<SDL_Texture*>(-1);
+    }
+
+    // Assign textures to the vector
+    playerTextures = { playerTextureLeft, playerTextureRight, playerTextureWalkingLeft, playerTextureWalkingRight, playerTextureLost };
+    return playerTextures;
 }
 
 int main() {
@@ -559,6 +589,7 @@ int main() {
     font = TTF_OpenFont("../resources/font/firacode.ttf", 24);
 
     string playerCharStr = (playerChar == mario) ? "mario" : "luigi";
+    cout << "int main() Selected character: " << playerCharStr << endl;
 
     vector<SDL_Texture*> backgroundTextures = loadBackgroundTextures(renderer, "../resources/backgrounds");
     int currentBackgroundIndex = 0;
@@ -571,24 +602,9 @@ int main() {
     SDL_Texture* doorTextureOpen = IMG_LoadTexture(renderer, "../resources/door/open.png");
     vector textures = { backgroundTextures[currentBackgroundIndex], brickTexture, vineTexture, starCoinTexture, enemyTextureLeft, enemyTextureRight, doorTextureClosed, doorTextureOpen };
 
-    SDL_Texture* playerTextureLeft = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/left.png").c_str());
-    SDL_Texture* playerTextureRight = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/right.png").c_str());
-    SDL_Texture* playerTextureWalkingLeft = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/walkingleft.png").c_str());
-    SDL_Texture* playerTextureWalkingRight = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/walkingright.png").c_str());
-    SDL_Texture* playerTextureLost = IMG_LoadTexture(renderer, ("../resources/player/" + playerCharStr + "/lost.png").c_str());
-    vector playerTextures = { playerTextureLeft, playerTextureRight, playerTextureWalkingLeft, playerTextureWalkingRight, playerTextureLost };
-
     for (auto& texture : textures) {
         if (!texture) {
             cerr << "Failed to load textures!" << endl << SDL_GetError() << endl;
-            SDL_Quit();
-            return -1;
-        }
-    }
-
-    for (auto& texture : playerTextures) {
-        if (!texture) {
-            cerr << "Failed to load player textures!" << endl << SDL_GetError() << endl;
             SDL_Quit();
             return -1;
         }
@@ -621,23 +637,26 @@ int main() {
     bool canDoubleJump = false;
     float gravity = 0.8;
     Sint32 levelStartTime = 0;
-    Uint32 lastJumpTime = 0;
-    Uint32 lastStepTime = 0;
-    Uint32 dyingStartTime = 0;
-    Uint32 transitionStartTime = 0;
+    Sint32 lastJumpTime = 0;
+    Sint32 lastStepTime = 0;
+    Sint32 dyingStartTime = 0;
+    Sint32 transitionStartTime = 0;
     string deathReason;
 
     // vector for all the level files, init selected index, game state, level rects, current level index and is last level
     vector<string> levelFiles = getLevelFiles("../levels");
     GameState gameState = START_SCREEN;
+    GameMode gameMode = NORMAL;
     vector<SDL_Rect> levelRects;
     int currentLevelIndex = 0;
     bool isLastLevel = false;
+    bool isWalkingLeft = false;
 
     bool quit = false;
     SDL_Event e;
 
     while (!quit) {
+        Sint32 stepCooldown = 685.877;
         Sint32 currentTime = SDL_GetTicks();
         while (SDL_PollEvent(&e) != 0) {
             if (e.type == SDL_QUIT) {
@@ -685,7 +704,6 @@ int main() {
                         gameState = LOST;
                     }
                 } else if (gameState == PLAYING) {
-                    Uint32 stepCooldown = 685.877;
                     SDL_FRect newRect = player.rect;
                     float moveSpeed = TILE_SIZE;
 
@@ -721,6 +739,7 @@ int main() {
                             Mix_PlayChannel(-1, stepSound, 0);
                             lastStepTime = currentTime;
                         }
+                        isWalkingLeft = true;
                         break;
                     case SDLK_d:
                         newRect.x += moveSpeed;
@@ -729,6 +748,7 @@ int main() {
                             Mix_PlayChannel(-1, stepSound, 0);
                             lastStepTime = currentTime;
                         }
+                        isWalkingLeft = false;
                         break;
                     case SDLK_p:
                         collectedCoins = totalCoins;
@@ -765,16 +785,16 @@ int main() {
 
                     // Check for collisions with other game objects
                     for (const auto& obj : gameObjects) {
-                        if (obj.texture != vineTexture && obj.texture != starCoinTexture && hasIntersection(newRect, obj.rect)) {
-                            collision = true;
-                            break;
-                        }
                         if (obj.texture == starCoinTexture && hasIntersection(newRect, obj.rect)) {
                             ++collectedCoins;
                             erase_if(gameObjects, [&obj](const GameObject& o) {
                                 return &o == &obj;
                             });
                             Mix_PlayChannel(0, coinSound, 0); // Play the coin sound on any available channel
+                            break;
+                        }
+                        if (obj.texture != vineTexture && obj.texture != starCoinTexture && hasIntersection(newRect, obj.rect)) {
+                            collision = true;
                             break;
                         }
                     }
@@ -790,8 +810,10 @@ int main() {
                 if (gameState == LEVEL_SELECT) {
                     for (int i = 0; i < levelRects.size(); ++i) {
                         if (isPointInRect(mouseX, mouseY, levelRects[i])) {
+                            currentLevelIndex = i + levelScrollOffset;
                             gameObjects.clear();
                             collectedCoins = 0;
+                            playerTextures = switchCharacter(playerChar, renderer);
                             loadLevel(levelFiles[i], gameObjects, textures, playerTextures, enemies, player, door);
                             gameState = PLAYING;
                             levelStartTime = 0;
@@ -819,6 +841,7 @@ int main() {
                             collectedCoins = 0;
                             gameObjects.clear();
                             enemies.clear();
+                            door.texture = doorTextureClosed;
                             changeBackground(backgroundTextures, textures, currentLevelIndex);
                             loadLevel(levelFiles[currentLevelIndex], gameObjects, textures, playerTextures, enemies, player, door);
                             gameState = PLAYING;
@@ -834,29 +857,31 @@ int main() {
                     if (isButtonClicked(buttonRect(settingsButton), mouseX, mouseY)) {
                         gameState = SETTINGS;
                     }
+                } else if (gameState == SETTINGS) {
+                    if (isPointInRectF(mouseX, mouseY, marioRect)) {
+                        playerChar = mario;
+                        playerCharStr = "mario";
+                    } else if (isPointInRectF(mouseX, mouseY, luigiRect)) {
+                        playerChar = luigi;
+                        playerCharStr = "luigi";
+                    }
+                    if (isButtonClicked(buttonRect(aboutButton), mouseX, mouseY)) {
+                        gameState = ABOUT;
+                    }
                 } else if (gameState == MODE_SELECT) {
                     if (isButtonClicked(buttonRect(normalModeButton), mouseX, mouseY)) {
                         gameObjects.clear();
+                        enemies.clear();
+                        totalCoins = 0;
                         collectedCoins = 0;
+                        playerTextures = switchCharacter(playerChar, renderer);
                         loadLevel(levelFiles[0], gameObjects, textures, playerTextures, enemies, player, door);
                         gameState = PLAYING;
                         levelStartTime = 0;
                     }
                     if (isButtonClicked(buttonRect(levelSelectButton), mouseX, mouseY)) {
                         gameState = LEVEL_SELECT;
-                    }
-                } else if (gameState == SETTINGS) {
-                    if (isPointInRectF(mouseX, mouseY, marioRect)) {
-                        playerChar = mario;
-                        switchCharacter(playerChar, renderer, playerTextures, player);
-                    } else if (isPointInRectF(mouseX, mouseY, luigiRect)) {
-                        playerChar = luigi;
-                        switchCharacter(playerChar, renderer, playerTextures, player);
-                    }
-                    if (isButtonClicked(buttonRect(changeBackgroundButton), mouseX, mouseY)) {
-                        changeBackground(backgroundTextures, textures, currentBackgroundIndex);
-                    } else if (isButtonClicked(buttonRect(aboutButton), mouseX, mouseY)) {
-                        gameState = ABOUT;
+                        gameMode = CUSTOM;
                     }
                 } else if (gameState == LOST) {
                     if (isPointInRectF(mouseX, mouseY, buttonRect(retryButton))) {
@@ -944,6 +969,32 @@ int main() {
                         player.rect.y = SCREEN_HEIGHT - player.rect.h;
                     }
                 }
+            }
+
+            if (currentTime - lastStepTime > stepCooldown) {
+                if (isWalkingLeft) {
+                    player.texture = playerTextureLeft;
+                } else {
+                    player.texture = playerTextureRight;
+                }
+            }
+
+            // Calculate the y position of the last tile row
+            float lastTileRowY = (SCREEN_HEIGHT / TILE_SIZE - 1) * TILE_SIZE; // NOLINT(*-integer-division)
+
+            // Check if the player's y position is more than the last tile row's y position
+            if (player.rect.y >= lastTileRowY) {
+                cout << "Player Rect Y: " << player.rect.y << endl << "lastTileRowY: " << lastTileRowY << endl;
+                if (musicPlaying) {
+                    Mix_PauseMusic();
+                    Mix_VolumeMusic(64);
+                    Mix_PlayChannel(-1, lostSound, 0);
+                    musicPlaying = false;
+                }
+                dyingStartTime = currentTime;
+                player.texture = playerTextures[4];
+                deathReason = "fall";
+                gameState = DYING;
             }
 
             // render the screen and all the game objects
@@ -1056,6 +1107,7 @@ int main() {
             renderLostScreen(renderer, deathReason);
         } else {
             levelStartTime = 0;
+            if (gameMode == CUSTOM) { isLastLevel = false; }
             renderWinningScreen(renderer, isLastLevel);
         }
     }
@@ -1069,6 +1121,9 @@ int main() {
     Mix_FreeChunk(jumpSound);
     Mix_FreeChunk(killSound);
     Mix_FreeChunk(stepSound);
+    for (auto texture : playerTextures) {
+        SDL_DestroyTexture(texture);
+    }
     for (auto texture : textures) {
         SDL_DestroyTexture(texture);
     }
