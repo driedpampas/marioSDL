@@ -551,8 +551,6 @@ SDL_Texture* playerTextureLost = nullptr;
 vector<SDL_Texture*> switchCharacter(Character character, SDL_Renderer* renderer) {
     string characterStr = (character == mario) ? "mario" : "luigi";
 
-    cout << "Switching to " << characterStr << " character" << endl;
-
     // Clear existing textures
     for (auto texture : playerTextures) {
         SDL_DestroyTexture(texture);
@@ -588,11 +586,9 @@ int main() {
     TTF_Init();
     font = TTF_OpenFont("../resources/font/firacode.ttf", 24);
 
-    string playerCharStr = (playerChar == mario) ? "mario" : "luigi";
-    cout << "int main() Selected character: " << playerCharStr << endl;
-
     vector<SDL_Texture*> backgroundTextures = loadBackgroundTextures(renderer, "../resources/backgrounds");
     int currentBackgroundIndex = 0;
+
     SDL_Texture* brickTexture = IMG_LoadTexture(renderer, "../resources/brick.png");
     SDL_Texture* vineTexture = IMG_LoadTexture(renderer, "../resources/vine.png");
     SDL_Texture* starCoinTexture = IMG_LoadTexture(renderer, "../resources/star-coin.png");
@@ -600,6 +596,7 @@ int main() {
     SDL_Texture* enemyTextureRight = IMG_LoadTexture(renderer, "../resources/enemy/right.png");
     SDL_Texture* doorTextureClosed = IMG_LoadTexture(renderer, "../resources/door/closed.png");
     SDL_Texture* doorTextureOpen = IMG_LoadTexture(renderer, "../resources/door/open.png");
+
     vector textures = { backgroundTextures[currentBackgroundIndex], brickTexture, vineTexture, starCoinTexture, enemyTextureLeft, enemyTextureRight, doorTextureClosed, doorTextureOpen };
 
     for (auto& texture : textures) {
@@ -619,6 +616,7 @@ int main() {
     Mix_Chunk* jumpSound = Mix_LoadWAV("../resources/sounds/jump.wav");
     Mix_Chunk* killSound = Mix_LoadWAV("../resources/sounds/kill.mp3");
     Mix_Chunk* stepSound = Mix_LoadWAV("../resources/sounds/steps.mp3");
+    vector<Mix_Chunk*> sounds = { lostSound, coinSound, clearSound, wonSound, jumpSound, killSound, stepSound };
 
     Mix_VolumeMusic(64);
     Mix_VolumeChunk(coinSound, 64);
@@ -674,7 +672,7 @@ int main() {
                     break;
                 default: break;
                 }
-                if (gameState == LEVEL_SELECT || gameState == START_SCREEN) {
+                if (gameState == START_SCREEN) {
                     switch (e.key.keysym.sym) {
                     case SDLK_ESCAPE:
                         quit = true;
@@ -683,10 +681,17 @@ int main() {
                     }
                 } else if (gameState == SETTINGS || gameState == MODE_SELECT) {
                     switch (e.key.keysym.sym) {
-                        case SDLK_ESCAPE:
-                            gameState = START_SCREEN;
-                            break;
-                        default: break;
+                    case SDLK_ESCAPE:
+                        gameState = START_SCREEN;
+                        break;
+                    default: break;
+                    }
+                } else if (gameState == LEVEL_SELECT) {
+                    switch (e.key.keysym.sym) {
+                    case SDLK_ESCAPE:
+                        gameState = MODE_SELECT;
+                        break;
+                    default: break;
                     }
                 } else if (gameState == ABOUT) {
                     switch (e.key.keysym.sym) {
@@ -860,10 +865,8 @@ int main() {
                 } else if (gameState == SETTINGS) {
                     if (isPointInRectF(mouseX, mouseY, marioRect)) {
                         playerChar = mario;
-                        playerCharStr = "mario";
                     } else if (isPointInRectF(mouseX, mouseY, luigiRect)) {
                         playerChar = luigi;
-                        playerCharStr = "luigi";
                     }
                     if (isButtonClicked(buttonRect(aboutButton), mouseX, mouseY)) {
                         gameState = ABOUT;
@@ -984,7 +987,6 @@ int main() {
 
             // Check if the player's y position is more than the last tile row's y position
             if (player.rect.y >= lastTileRowY) {
-                cout << "Player Rect Y: " << player.rect.y << endl << "lastTileRowY: " << lastTileRowY << endl;
                 if (musicPlaying) {
                     Mix_PauseMusic();
                     Mix_VolumeMusic(64);
@@ -1114,13 +1116,9 @@ int main() {
 
     // free up resources
     Mix_FreeMusic(soundtrack);
-    Mix_FreeChunk(lostSound);
-    Mix_FreeChunk(coinSound);
-    Mix_FreeChunk(clearSound);
-    Mix_FreeChunk(wonSound);
-    Mix_FreeChunk(jumpSound);
-    Mix_FreeChunk(killSound);
-    Mix_FreeChunk(stepSound);
+    for (auto sound : sounds ) {
+        Mix_FreeChunk(sound);
+    }
     for (auto texture : playerTextures) {
         SDL_DestroyTexture(texture);
     }
